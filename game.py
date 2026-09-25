@@ -1,16 +1,14 @@
-import enum
 import sys
 import typing
 
 if 'torch' not in sys.modules:
   print(f"Loading torch")
 import torch
+import torch.nn
 
 cpu_device = torch.device('cpu')
 gpu_device = torch.device('cuda')
-if not torch.cuda.is_available():
-  print("Cuda not available")
-  sys.exit(1)
+assert torch.cuda.is_available()
 
 
 PLAYER_COUNT = 2
@@ -203,11 +201,20 @@ OBS_INT_END = OBS_INT_BONUS_SECTORS + SECTOR_COUNT
 assert OBS_INT_END == OBS_INT_LENGTH
 
 
-OBS_PILE_EMBED_FOCUS = 0
-OBS_PILE_EMBED_TRACK = OBS_PILE_EMBED_FOCUS + 1
-OBS_PILE_EMBED_DECK = OBS_PILE_EMBED_TRACK + TRACK_CARD_COUNT
-OBS_PILE_EMBED_KEPT = OBS_PILE_EMBED_DECK + 1
-OBS_PILE_EMBED_COUNT = OBS_PILE_EMBED_KEPT + PLAYER_COUNT
+OBS_SLOT_INDEX_FOCUS = 0
+OBS_SLOT_INDEX_TRACK = OBS_SLOT_INDEX_FOCUS + 1
+OBS_SLOT_INDEX_COUNT = OBS_SLOT_INDEX_TRACK + TRACK_CARD_COUNT
+
+
+OBS_PILE_PRESENT_DECK = 0
+OBS_PILE_PRESENT_KEPT = OBS_PILE_PRESENT_DECK + 1
+OBS_PILE_PRESENT_COUNT = OBS_PILE_PRESENT_KEPT + PLAYER_COUNT
+
+
+OBS_PILE_CACHED_EMBED_DECK = 0
+OBS_PILE_CACHED_EMBED_KEPT = OBS_PILE_CACHED_EMBED_DECK + 1
+OBS_PILE_CACHED_EMBED_COUNT = OBS_PILE_CACHED_EMBED_KEPT + PLAYER_COUNT
+
 
 
 template_starting_hid_bool = torch.tensor(
@@ -219,25 +226,15 @@ HID_BOOL_END = HID_BOOL_SCORE_SECTOR + SECTOR_COUNT
 assert HID_BOOL_END == HID_BOOL_LENGTH
 
 
-HID_PILE_PRESENT_DECK = 0
-HID_PILE_PRESENT_KEPT = HID_PILE_PRESENT_DECK + 1
-HID_PILE_PRESENT_COUNT = HID_PILE_PRESENT_KEPT + PLAYER_COUNT
-
-
-HID_PILE_INDEX_FOCUS = 0
-HID_PILE_INDEX_TRACK = HID_PILE_INDEX_FOCUS + 1
-HID_PILE_INDEX_COUNT = HID_PILE_INDEX_TRACK + TRACK_CARD_COUNT
-
-
 
 class ExpanseState():
   def __init__(self,
-               obs_bool: torch.Tensor, 
-               obs_int: torch.Tensor, 
-               obs_pile_embed: torch.Tensor, 
+               obs_bool: torch.Tensor,
+               obs_int: torch.Tensor,
+               obs_slot_index: torch.Tensor,
+               obs_pile_present: torch.Tensor,
+               obs_pile_cached_embed: torch.Tensor,
                hid_bool: torch.Tensor,
-               hid_pile_present: torch.Tensor,
-               hid_pile_index: torch.Tensor,
                *,
                batch_indices: torch.Tensor | None = None):
     self.batch = obs_bool.shape[:-1]
@@ -247,11 +244,11 @@ class ExpanseState():
       self.batch_indices = [torch.arange(b, dtype=torch.long, device=gpu_device) for b in self.batch]
     self.obs_bool = obs_bool
     self.obs_int = obs_int
-    self.obs_pile_embed = obs_pile_embed
-    self.CARD_EMBED_LENGTH = obs_pile_embed.shape[-1]
+    self.obs_slot_index = obs_slot_index
+    self.obs_pile_present = obs_pile_present
+    self.obs_pile_cached_embed = obs_pile_cached_embed
+    self.CARD_EMBED_LENGTH = obs_pile_cached_embed.shape[-1]
     self.hid_bool = hid_bool
-    self.hid_pile_present = hid_pile_present
-    self.hid_pile_index = hid_pile_index
 
 
   def obs_int_fleets(self):
@@ -267,30 +264,30 @@ class ExpanseState():
     return ExpanseState(
       obs_bool=torch.concat([e.obs_bool for e in elements], dim=dim),
       obs_int=torch.concat([e.obs_int for e in elements], dim=dim),
-      obs_pile_embed=torch.concat([e.obs_pile_embed for e in elements], dim=dim),
-      hid_bool=torch.concat([e.hid_bool for e in elements], dim=dim),
-      hid_pile_present=torch.concat([e.hid_pile_present for e in elements], dim=dim),
-      hid_pile_index=torch.concat([e.hid_pile_index for e in elements], dim=dim)
+      obs_slot_index=torch.concat([e.obs_slot_index for e in elements], dim=dim),
+      obs_pile_present=torch.concat([e.obs_pile_present for e in elements], dim=dim),
+      obs_pile_cached_embed=torch.concat([e.obs_pile_cached_embed for e in elements], dim=dim),
+      hid_bool=torch.concat([e.hid_bool for e in elements], dim=dim)
     )
 
   def index(self, *index) -> typing.Self:
     return ExpanseState(
       obs_bool=self.obs_bool[*index, :],
       obs_int=self.obs_int[*index, :],
-      obs_pile_embed=self.obs_pile_embed[*index, :, :],
-      hid_bool=self.hid_bool[*index, :],
-      hid_pile_present=self.hid_pile_present[*index, :, :],
-      hid_pile_index=self.hid_pile_index[*index, :]
+      obs_slot_index=self.obs_slot_index[*index, :],
+      obs_pile_present=self.obs_pile_present[*index, :, :],
+      obs_pile_cached_embed=self.obs_pile_cached_embed[*index, :, :],
+      hid_bool=self.hid_bool[*index, :]
     )
 
   def clone(self, *args, **kwargs) -> typing.Self:
     return ExpanseState(
       obs_bool=self.obs_bool.clone(*args, **kwargs),
       obs_int=self.obs_int.clone(*args, **kwargs),
-      obs_pile_embed=self.obs_pile_embed.clone(*args, **kwargs),
+      obs_slot_index=self.obs_slot_index.clone(*args, **kwargs),
+      obs_pile_present=self.obs_pile_present.clone(*args, **kwargs),
+      obs_pile_cached_embed=self.obs_pile_cached_embed.clone(*args, **kwargs),
       hid_bool=self.hid_bool.clone(*args, **kwargs),
-      hid_pile_present=self.hid_pile_present.clone(*args, **kwargs),
-      hid_pile_index=self.hid_pile_index.clone(*args, **kwargs),
       batch_indices=self.batch_indices
     )
 
@@ -298,69 +295,63 @@ class ExpanseState():
     return ExpanseState(
       obs_bool=self.obs_bool.view(*shape, OBS_BOOL_LENGTH),
       obs_int=self.obs_int.view(*shape, OBS_INT_LENGTH),
-      obs_pile_embed=self.obs_pile_embed.view(*shape, OBS_PILE_EMBED_COUNT, self.CARD_EMBED_LENGTH),
-      hid_bool=self.hid_bool.view(*shape, HID_BOOL_LENGTH),
-      hid_pile_present=self.hid_pile_present.view(*shape, HID_PILE_PRESENT_COUNT, CARD_COUNT),
-      hid_pile_index=self.hid_pile_index.view(*shape, HID_PILE_INDEX_COUNT)
+      obs_slot_index=self.obs_slot_index.view(*shape, OBS_SLOT_INDEX_COUNT),
+      obs_pile_present=self.obs_pile_present.view(*shape, OBS_PILE_PRESENT_COUNT, CARD_COUNT),
+      obs_pile_cached_embed=self.obs_pile_cached_embed.view(*shape, OBS_PILE_CACHED_EMBED_COUNT, self.CARD_EMBED_LENGTH),
+      hid_bool=self.hid_bool.view(*shape, HID_BOOL_LENGTH)
     )
   
   def repeat(self, *repeats) -> typing.Self:
     return ExpanseState(
       obs_bool=self.obs_bool.repeat(*repeats, 1),
       obs_int=self.obs_int.repeat(*repeats, 1),
-      obs_pile_embed=self.obs_pile_embed.repeat(*repeats, 1, 1),
-      hid_bool=self.hid_bool.repeat(*repeats, 1),
-      hid_pile_present=self.hid_pile_present.repeat(*repeats, 1, 1),
-      hid_pile_index=self.hid_pile_index.repeat(*repeats, 1)
+      obs_slot_index=self.obs_slot_index.repeat(*repeats, 1),
+      obs_pile_present=self.obs_pile_present.repeat(*repeats, 1, 1),
+      obs_pile_cached_embed=self.obs_pile_cached_embed.repeat(*repeats, 1, 1),
+      hid_bool=self.hid_bool.repeat(*repeats, 1)
     )
 
 
-  def generate_empty(card_embeds) -> typing.Self:
-    _CARD_EMBED_LENGTH = card_embeds.shape[1]
-
+  def generate_empty(card_embeds: torch.nn.Embedding) -> typing.Self:
     return ExpanseState(
       obs_bool=torch.zeros((0, OBS_BOOL_LENGTH), dtype=torch.bool, device=gpu_device),
       obs_int=torch.zeros((0, OBS_INT_LENGTH), dtype=torch.int8, device=gpu_device),
-      obs_pile_embed=torch.zeros((0, OBS_PILE_EMBED_COUNT, _CARD_EMBED_LENGTH), dtype=torch.float16, device=gpu_device),
+      obs_slot_index=torch.zeros((0, OBS_SLOT_INDEX_COUNT), dtype=torch.long, device=gpu_device),
+      obs_pile_present=torch.zeros((0, OBS_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
+      obs_pile_cached_embed=torch.zeros((0, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float16, device=gpu_device),
       hid_bool=torch.zeros((0, HID_BOOL_LENGTH), dtype=torch.bool, device=gpu_device),
-      hid_pile_present=torch.zeros((0, HID_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
-      hid_pile_index=torch.zeros((0, HID_PILE_INDEX_COUNT), dtype=torch.long, device=gpu_device),
       batch_indices=[torch.zeros((0,), dtype=torch.long, device=gpu_device)]
     )
 
-  def generate_starting(BATCH, card_embeds) -> typing.Self:
-    _CARD_EMBED_LENGTH = card_embeds.shape[1]
-
+  def generate_starting(BATCH: int, card_embeds: torch.nn.Embedding) -> typing.Self:
     state = ExpanseState(
       obs_bool=template_starting_obs_bool.view(1, OBS_BOOL_LENGTH).repeat(BATCH, 1),
       obs_int=template_starting_obs_int.view(1, OBS_INT_LENGTH).repeat(BATCH, 1),
-      obs_pile_embed=torch.zeros((BATCH, OBS_PILE_EMBED_COUNT, _CARD_EMBED_LENGTH), dtype=torch.float16, device=gpu_device),
-      hid_bool=template_starting_hid_bool.view(1, HID_BOOL_LENGTH).repeat(BATCH, 1),
-      hid_pile_present=torch.ones((BATCH, HID_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
-      hid_pile_index=torch.zeros((BATCH, HID_PILE_INDEX_COUNT), dtype=torch.long, device=gpu_device)
+      obs_slot_index=torch.zeros((BATCH, OBS_SLOT_INDEX_COUNT), dtype=torch.long, device=gpu_device),
+      obs_pile_present=torch.ones((BATCH, OBS_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
+      obs_pile_cached_embed=torch.zeros((BATCH, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float16, device=gpu_device),
+      hid_bool=template_starting_hid_bool.view(1, HID_BOOL_LENGTH).repeat(BATCH, 1)
     )
 
     state.obs_bool[state.batch_indices[0], OBS_BOOL_TURN+torch.randint(0, PLAYER_COUNT, (BATCH,), device=gpu_device)] = True
     state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT]
 
-    state.hid_pile_present[:, HID_PILE_PRESENT_KEPT:HID_PILE_PRESENT_KEPT+PLAYER_COUNT, :] = False
+    state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
-    state.hid_pile_index[:, HID_PILE_INDEX_TRACK:HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT] = \
+    state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK:OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT] = \
       torch.multinomial(torch.ones((BATCH, CARD_COUNT), dtype=torch.float32, device=gpu_device), TRACK_CARD_COUNT)
-    state.hid_pile_present[
+    state.obs_pile_present[
       state.batch_indices[0].view(state.batch[0], 1), 
-      HID_PILE_PRESENT_DECK,
-      state.hid_pile_index[:, HID_PILE_INDEX_TRACK:HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT]
+      OBS_PILE_PRESENT_DECK,
+      state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK:OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT]
     ] = False
 
-    state.obs_pile_embed[:, OBS_PILE_EMBED_DECK, :] = card_embeds[:CARD_COUNT, :].sum(dim=0).view(1, state.CARD_EMBED_LENGTH)
-    state.obs_pile_embed[:, OBS_PILE_EMBED_TRACK:OBS_PILE_EMBED_TRACK+TRACK_CARD_COUNT, :] = \
-      card_embeds[state.hid_pile_index[:, HID_PILE_INDEX_TRACK:HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT], :]
-    state.obs_pile_embed[:, OBS_PILE_EMBED_DECK, :] -= state.obs_pile_embed[:, OBS_PILE_EMBED_TRACK:OBS_PILE_EMBED_TRACK+TRACK_CARD_COUNT, :].sum(dim=1)
+    state.obs_pile_present[:, OBS_PILE_PRESENT_KEPT:OBS_PILE_PRESENT_KEPT+PLAYER_COUNT, :] = False
 
-    state.obs_pile_embed[:, OBS_PILE_EMBED_FOCUS, :] = card_embeds[CARD_EMPTY_FOCUS, :].view(1, state.CARD_EMBED_LENGTH)
-    state.hid_pile_index[:, HID_PILE_INDEX_FOCUS] = CARD_EMPTY_FOCUS
-
+    state.obs_pile_cached_embed[:, OBS_PILE_CACHED_EMBED_DECK, :] = (
+      (card_embeds.weight[:CARD_COUNT, :].sum(dim=0).view(1, state.CARD_EMBED_LENGTH))
+      - (card_embeds(state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK:OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT]).sum(dim=1))
+    )
     return state
 
 

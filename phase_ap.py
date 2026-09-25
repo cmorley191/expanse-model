@@ -1,6 +1,8 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
 
+import torch
+import torch.nn
 
 class PhaseAP(PhaseRule):
 
@@ -21,7 +23,7 @@ class PhaseAP(PhaseRule):
     )
 
 
-  def enumerate_fleet(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_fleet(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     # (batch, count, src, dest, active player)
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1, 1, 1)
     self.use_ap(states)
@@ -63,7 +65,7 @@ class PhaseAP(PhaseRule):
     return (states, mask)
   
 
-  def enumerate_influence(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_influence(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     # (batch, base, player)
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     self.use_ap(states)
@@ -90,7 +92,7 @@ class PhaseAP(PhaseRule):
     return (states, mask)
   
 
-  def enumerate_build(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_build(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     # (batch, player)
     states: ExpanseState = state.clone().view(state.batch[0], 1).repeat(1, PLAYER_COUNT)
     self.use_ap(states)
@@ -108,7 +110,7 @@ class PhaseAP(PhaseRule):
     return (states, mask)
 
 
-  def enumerate_pass(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_pass(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_int[:, :, OBS_INT_PHASE_AP] = 1
     self.use_ap(states)

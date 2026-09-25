@@ -1,6 +1,8 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
 
+import torch
+import torch.nn
 
 
 class PhaseScore_Sector(PhaseRule):
@@ -39,19 +41,18 @@ class PhaseScore_Event(PhaseRule):
       & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
     )
   
-  def enumerate_use_event(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_use_event(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     # (batch, active player, kept card)
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1).repeat(1, PLAYER_COUNT, CARD_COUNT)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = True
-    states.obs_pile_embed[:, :, :, OBS_PILE_EMBED_FOCUS, :] = card_embeds[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
-    states.obs_pile_embed[:, player_indices, :, OBS_PILE_EMBED_KEPT+player_indices, :] -= card_embeds[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
-    states.hid_pile_index[:, :, :, HID_PILE_INDEX_FOCUS] = card_indices.view(1, 1, CARD_COUNT)
-    states.hid_pile_present[
+    states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = card_indices.view(1, 1, CARD_COUNT)
+    states.obs_pile_cached_embed[:, player_indices, :, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] -= card_embeds.weight[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
+    states.obs_pile_present[
       :,
       player_indices.view(PLAYER_COUNT, 1),
       card_indices.view(1, CARD_COUNT),
-      HID_PILE_PRESENT_KEPT+player_indices.view(PLAYER_COUNT, 1),
+      OBS_PILE_PRESENT_KEPT+player_indices.view(PLAYER_COUNT, 1),
       card_indices.view(1, CARD_COUNT)
     ] = False
 
@@ -59,7 +60,7 @@ class PhaseScore_Event(PhaseRule):
       # active player
       (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
       # has card
-      & (state.hid_pile_present[:, HID_PILE_PRESENT_KEPT:HID_PILE_PRESENT_KEPT+PLAYER_COUNT, :])
+      & (state.obs_pile_present[:, OBS_PILE_PRESENT_KEPT:OBS_PILE_PRESENT_KEPT+PLAYER_COUNT, :])
     )
 
     states: ExpanseState = states.view(state.batch[0], PLAYER_COUNT * CARD_COUNT)
@@ -67,7 +68,7 @@ class PhaseScore_Event(PhaseRule):
 
     return (states, mask)
 
-  def enumerate_pass(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_pass(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     #assert PLAYER_COUNT == 2
     states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = False

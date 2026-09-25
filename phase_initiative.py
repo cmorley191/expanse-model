@@ -1,5 +1,7 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
+
+import torch
 
 
 INIITATIVE_USE_EVENT = 0
@@ -25,24 +27,22 @@ class PhaseInitiative(PhaseRule):
     states = state.clone()
     states.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT] = False
 
-    focus_card = state.hid_pile_index[:, HID_PILE_INDEX_FOCUS]
+    focus_card = state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]
 
     states: ExpanseState = states.view(state.batch[0], 1, 1).repeat(1, INITIATIVE_USE_COUNT, PLAYER_COUNT)
     states.obs_bool[:, INIITATIVE_USE_EVENT, :, OBS_BOOL_PHASE_EVENT] = True
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PHASE_AP_TURN] = False
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PHASE_DONE] = True
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
-    states.obs_pile_embed[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_PILE_EMBED_FOCUS, :] = \
-      card_embeds[CARD_EMPTY_FOCUS, :].view(1, 1, 1, state.CARD_EMBED_LENGTH)
-    states.hid_pile_index[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, HID_PILE_INDEX_FOCUS] = CARD_EMPTY_FOCUS
+    states.obs_slot_index[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
     states.obs_int[:, INITIATIVE_USE_KEEP, player_indices, OBS_INT_CP+player_indices] -= 1
-    states.obs_pile_embed[:, INITIATIVE_USE_KEEP, player_indices, OBS_PILE_EMBED_KEPT+player_indices, :] += \
-      card_embeds[focus_card, :].view(state.batch[0], 1, state.CARD_EMBED_LENGTH)
-    states.hid_pile_present[
+    states.obs_pile_cached_embed[:, INITIATIVE_USE_KEEP, player_indices, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] += \
+      card_embeds(focus_card).view(state.batch[0], 1, state.CARD_EMBED_LENGTH)
+    states.obs_pile_present[
       state.batch_indices[0].view(state.batch[0], 1),
       INITIATIVE_USE_KEEP,
       player_indices.view(1, PLAYER_COUNT),
-      HID_PILE_PRESENT_KEPT+player_indices.view(1, PLAYER_COUNT),
+      OBS_PILE_PRESENT_KEPT+player_indices.view(1, PLAYER_COUNT),
       focus_card.view(state.batch[0], 1)
     ] = True
 

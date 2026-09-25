@@ -1,5 +1,8 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
+
+import torch
+
 
 class PhaseNonscoreTurnDone(PhaseRule):
   

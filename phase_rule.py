@@ -4,8 +4,9 @@ import inspect
 import os
 import pkgutil
 
-import expanse_game
+import game as game
 import torch
+import torch.nn
 
 
 PHASE_TYPE_CHOICE = 0
@@ -20,16 +21,16 @@ class PhaseRule(abc.ABC):
     pass
 
   @abc.abstractmethod
-  def matching(self, state: expanse_game.ExpanseState) -> torch.Tensor:
+  def matching(self, state: game.ExpanseState) -> torch.Tensor:
     pass
 
   @abc.abstractmethod
-  def enumerate_actions(self, state: expanse_game.ExpanseState, card_embeds: torch.Tensor) -> tuple[expanse_game.ExpanseState, torch.Tensor]:
+  def enumerate_actions(self, state: game.ExpanseState, card_embeds: torch.nn.Embedding) -> tuple[game.ExpanseState, torch.Tensor]:
     pass
 
 
-  def concat_state_masks(self, state_masks = list[tuple[expanse_game.ExpanseState, torch.Tensor]]):
-    states = expanse_game.ExpanseState.concat([s for (s, m) in state_masks], dim=1)
+  def concat_state_masks(self, state_masks = list[tuple[game.ExpanseState, torch.Tensor]]):
+    states = game.ExpanseState.concat([s for (s, m) in state_masks], dim=1)
     mask = torch.concat([m for (s, m) in state_masks], dim=1)
 
     return (states, mask)

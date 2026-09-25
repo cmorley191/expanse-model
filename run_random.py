@@ -1,6 +1,6 @@
 import time
 
-from expanse_game import *
+from game import *
 from phase_rule import *
 
 import torch
@@ -11,7 +11,8 @@ phase_rules = get_phases()
 for rule in phase_rules:
   print(f'{rule.get_type()} {rule}')
 
-card_embeds = torch.randn((CARD_COUNT+EXTRA_CARD_INDEX_COUNT, 8), dtype=torch.float16, device=gpu_device)
+card_embeds = torch.nn.Embedding(num_embeddings=CARD_COUNT+EXTRA_CARD_INDEX_COUNT, embedding_dim=8, device=gpu_device)
+card_embeds.weight.requires_grad = False
 
 TOTAL_BATCH = 8192 * 2
 unsorted_state = ExpanseState.generate_starting(

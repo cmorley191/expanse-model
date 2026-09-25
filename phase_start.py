@@ -1,5 +1,8 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
+
+import torch
+import torch.nn
 
 
 track_advancement_matrix = (
@@ -25,22 +28,22 @@ class PhaseStart(PhaseRule):
     return (state.obs_bool[:, OBS_BOOL_PHASE_START])
   
   
-  def enumerate_kept_event(self, state: ExpanseState, card_embeds: torch.Tensor):
+  def enumerate_kept_event(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
     # (batch, active player, card kept)
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_START] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = True
 
     states: ExpanseState = states.repeat(1, PLAYER_COUNT, CARD_COUNT)
-    states.obs_pile_embed[:, player_indices, :, OBS_PILE_EMBED_KEPT+player_indices, :] -= card_embeds[:CARD_COUNT].view(1, CARD_COUNT, state.CARD_EMBED_LENGTH)
-    states.hid_pile_present[:, :, card_indices, HID_PILE_PRESENT_KEPT:HID_PILE_PRESENT_KEPT+PLAYER_COUNT, card_indices] = False
-    states.hid_pile_index[:, :, :, HID_PILE_INDEX_FOCUS] = card_indices.view(1, CARD_COUNT)
+    states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = card_indices.view(1, CARD_COUNT)
+    states.obs_pile_present[:, :, card_indices, OBS_PILE_PRESENT_KEPT:OBS_PILE_PRESENT_KEPT+PLAYER_COUNT, card_indices] = False
+    states.obs_pile_cached_embed[:, player_indices, :, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] -= card_embeds.weight[:CARD_COUNT].view(1, CARD_COUNT, state.CARD_EMBED_LENGTH)
 
     mask = (
       # active player
       (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
       # has card kept
-      & (state.hid_pile_present[:, HID_PILE_PRESENT_KEPT+player_indices, :])
+      & (state.obs_pile_present[:, OBS_PILE_PRESENT_KEPT+player_indices, :])
     )
 
     states: ExpanseState = states.view(state.batch[0], PLAYER_COUNT * CARD_COUNT)
@@ -62,33 +65,29 @@ class PhaseStart(PhaseRule):
     states.obs_bool[:, TRACK_USE_SCORE, :, :, OBS_BOOL_PHASE_SCORE_TURN] = True
     states.obs_bool[:, TRACK_USE_SCORE, :, :, OBS_BOOL_PHASE_CHOOSE_SECTOR] = True
 
-    track_card = state.hid_pile_index[:, HID_PILE_INDEX_TRACK:HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT]
+    track_card = state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK:OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT]
 
     states: ExpanseState = states.repeat(1, 1, PLAYER_COUNT, TRACK_CARD_COUNT)
-    states.obs_pile_embed[:, TRACK_USE_FOCUS_START:TRACK_USE_FOCUS_END, :, :, OBS_PILE_EMBED_FOCUS, :] = \
-      card_embeds[track_card, :].view(state.batch[0], 1, 1, TRACK_CARD_COUNT, state.CARD_EMBED_LENGTH)
-    states.hid_pile_index[:, TRACK_USE_FOCUS_START:TRACK_USE_FOCUS_END, :, :, HID_PILE_INDEX_FOCUS] = \
+    states.obs_slot_index[:, TRACK_USE_FOCUS_START:TRACK_USE_FOCUS_END, :, :, OBS_SLOT_INDEX_FOCUS] = \
       track_card.view(state.batch[0], 1, 1, TRACK_CARD_COUNT)
-    states.obs_pile_embed[:, TRACK_USE_KEEP, player_indices, :, OBS_PILE_EMBED_KEPT+player_indices, :] += \
-      card_embeds[track_card, :].view(1, state.batch[0], TRACK_CARD_COUNT, state.CARD_EMBED_LENGTH)
-    states.hid_pile_present[
+    states.obs_pile_present[
       state.batch_indices[0].view(state.batch[0], 1, 1),
       TRACK_USE_KEEP,
       player_indices.view(1, PLAYER_COUNT, 1),
       track_indices.view(1, 1, TRACK_CARD_COUNT),
-      HID_PILE_PRESENT_KEPT+player_indices.view(1, PLAYER_COUNT, 1),
+      OBS_PILE_PRESENT_KEPT+player_indices.view(1, PLAYER_COUNT, 1),
       (track_card.view(state.batch[0], 1, TRACK_CARD_COUNT) % CARD_COUNT)  # when % CARD_COUNT has effect it'll be masked out anyways
     ] = True
-    states.hid_pile_index[
+    states.obs_pile_cached_embed[:, TRACK_USE_KEEP, player_indices, :, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] += \
+      card_embeds(track_card).view(1, state.batch[0], TRACK_CARD_COUNT, state.CARD_EMBED_LENGTH)
+    states.obs_slot_index[
       :,
       :,
       :,
       track_indices.view(TRACK_CARD_COUNT, 1),
-      HID_PILE_INDEX_TRACK+track_indices[:TRACK_CARD_COUNT-1].view(1, TRACK_CARD_COUNT-1)
+      OBS_SLOT_INDEX_TRACK+track_indices[:TRACK_CARD_COUNT-1].view(1, TRACK_CARD_COUNT-1)
     ] = track_card[:, track_advancement_matrix].view(state.batch[0], 1, 1, TRACK_CARD_COUNT, TRACK_CARD_COUNT-1)
-    states.hid_pile_index[:, :, :, :, HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT-1] = CARD_EMPTY_TRACK
-    states.obs_pile_embed[:, :, :, :, OBS_PILE_EMBED_TRACK:OBS_PILE_EMBED_TRACK+TRACK_CARD_COUNT, :] = \
-      card_embeds[states.hid_pile_index[:, :, :, :, HID_PILE_INDEX_TRACK:HID_PILE_INDEX_TRACK+TRACK_CARD_COUNT], :]
+    states.obs_slot_index[:, :, :, :, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1] = CARD_EMPTY_TRACK
     states.obs_int[
       :,
       :,

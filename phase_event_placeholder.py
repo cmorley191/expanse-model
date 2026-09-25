@@ -1,5 +1,7 @@
 from phase_rule import *
-from expanse_game import *
+from game import *
+
+import torch
 
 
 class PhaseEvent_Placeholder(PhaseRule):
@@ -14,8 +16,7 @@ class PhaseEvent_Placeholder(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = True
-    new_state.obs_pile_embed[:, OBS_PILE_EMBED_FOCUS, :] = card_embeds[CARD_EMPTY_FOCUS, :].view(1, state.CARD_EMBED_LENGTH)
-    new_state.hid_pile_index[:, HID_PILE_INDEX_FOCUS] = CARD_EMPTY_FOCUS
+    new_state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     return new_state
   
