@@ -1,0 +1,193 @@
+from phase_rule import *
+from expanse_game import *
+
+
+
+class PhaseScore_Sector(PhaseRule):
+
+  def get_type(self):
+    return PHASE_TYPE_CHOICE
+  
+  def matching(self, state):
+    return (state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_SECTOR])
+  
+  def enumerate_actions(self, state, card_embeds):
+    # (batch, sector)
+    states: ExpanseState = state.clone().view(state.batch[0], 1)
+    #assert PLAYER_COUNT == 2
+    states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_SECTOR] = False
+    states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
+    states.obs_bool[:, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+    
+    states: ExpanseState = states.repeat(1, SECTOR_COUNT)
+    states.hid_bool[:, sector_indices, HID_BOOL_SCORE_SECTOR+sector_indices] = True
+
+    mask = (state.obs_int[:, OBS_INT_BONUS_SECTORS+sector_indices] != 0)
+
+    return (states, mask)
+
+
+class PhaseScore_Event(PhaseRule):
+  
+  def get_type(self):
+    return PHASE_TYPE_CHOICE
+  
+  def matching(self, state):
+    return (
+      state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
+      & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
+    )
+  
+  def enumerate_use_event(self, state: ExpanseState, card_embeds: torch.Tensor):
+    # (batch, active player, kept card)
+    states: ExpanseState = state.clone().view(state.batch[0], 1, 1).repeat(1, PLAYER_COUNT, CARD_COUNT)
+    states.obs_bool[:, :, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = False
+    states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = True
+    states.obs_pile_embed[:, :, :, OBS_PILE_EMBED_FOCUS, :] = card_embeds[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
+    states.obs_pile_embed[:, player_indices, :, OBS_PILE_EMBED_KEPT+player_indices, :] -= card_embeds[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
+    states.hid_pile_index[:, :, :, HID_PILE_INDEX_FOCUS] = card_indices.view(1, 1, CARD_COUNT)
+    states.hid_pile_present[
+      :,
+      player_indices.view(PLAYER_COUNT, 1),
+      card_indices.view(1, CARD_COUNT),
+      HID_PILE_PRESENT_KEPT+player_indices.view(PLAYER_COUNT, 1),
+      card_indices.view(1, CARD_COUNT)
+    ] = False
+
+    mask = (
+      # active player
+      (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
+      # has card
+      & (state.hid_pile_present[:, HID_PILE_PRESENT_KEPT:HID_PILE_PRESENT_KEPT+PLAYER_COUNT, :])
+    )
+
+    states: ExpanseState = states.view(state.batch[0], PLAYER_COUNT * CARD_COUNT)
+    mask = mask.view(state.batch[0], PLAYER_COUNT * CARD_COUNT)
+
+    return (states, mask)
+
+  def enumerate_pass(self, state: ExpanseState, card_embeds: torch.Tensor):
+    states: ExpanseState = state.clone().view(state.batch[0], 1)
+    #assert PLAYER_COUNT == 2
+    states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = False
+    states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+
+    mask = torch.ones(states.batch, dtype=torch.bool, device=gpu_device)
+
+    # enumerations already flat (1)
+
+    return (states, mask)
+
+  def enumerate_actions(self, state, card_embeds):
+    enumerations = [f(state, card_embeds) for f in [
+      self.enumerate_use_event,
+      self.enumerate_pass,
+    ]]
+
+    return self.concat_state_masks(enumerations)
+
+
+class PhaseScore_OpponentEventDone(PhaseRule):
+
+  def get_type(self):
+    return PHASE_TYPE_DETERMINISTIC
+  
+  def matching(self, state):
+    #assert PLAYER_COUNT == 2
+    return (
+      state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
+      & state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE]
+      & (state.obs_bool[:, OBS_BOOL_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_ACTION]))
+    )
+  
+  def enumerate_actions(self, state, card_embeds):
+    new_state = state.clone()
+    #assert PLAYER_COUNT == 2
+    new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
+    new_state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
+    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
+    new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = \
+      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT]
+    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] -= \
+      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
+
+    return new_state
+
+
+class PhaseScore_TurnPlayerEventDone(PhaseRule):
+
+  def get_type(self):
+    return PHASE_TYPE_DETERMINISTIC
+  
+  def matching(self, state):
+    #assert PLAYER_COUNT == 2
+    return (
+      state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
+      & state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE]
+      & (state.obs_bool[:, OBS_BOOL_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_ACTION]).logical_not())
+    )
+  
+  def enumerate_actions(self, state, card_embeds):
+    new_state = state.clone()
+    new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
+    new_state.obs_bool[:, OBS_BOOL_PHASE_DONE] = True
+    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
+
+    return new_state
+
+
+class PhaseScore_Score(PhaseRule):
+  
+  def get_type(self):
+    return PHASE_TYPE_DETERMINISTIC
+  
+  def matching(self, state):
+    return (
+      state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
+      & state.obs_bool[:, OBS_BOOL_PHASE_DONE]
+    )
+  
+  def enumerate_actions(self, state, card_embeds):
+    new_state = state.clone()
+    new_state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN] = False
+    new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = False
+    new_state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT] = False
+    obs_int_fleets = state.obs_int_fleets()
+    obs_int_influence = state.obs_int_influence()
+    #assert PLAYER_COUNT == 2
+    orbital_control = (
+      (obs_int_fleets != 0)
+      & (obs_int_fleets > obs_int_fleets.flip(dims=[2]))
+    )
+    base_present = obs_int_influence != 0
+    base_orbital_control_power_bonus = base_present & orbital_control[:, base_orbital, :]
+    base_power = obs_int_influence + base_orbital_control_power_bonus
+    base_control = (
+      base_present
+      & (base_power > base_power.flip(dims=[2]))
+    )
+
+    new_state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT] += (
+      (
+        base_control.to(torch.int8)
+        + (
+          state.obs_bool[:, OBS_BOOL_SCORE_SECTOR+base_sector].to(torch.int8).view(state.batch[0], BASE_COUNT, 1)
+          * base_present.to(torch.int8)
+          * bonus_sector_points[
+            (
+              (
+                (STARTING_BONUS_SECTORS * SECTOR_COUNT)
+                - state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT].sum(dim=1)
+              )
+              .to(torch.long)
+              .view(state.batch[0], 1, 1)
+            ),
+            base_control.logical_not().to(torch.long)
+          ]
+        )
+      ).sum(dim=1)
+    )
+
+    return new_state
+
