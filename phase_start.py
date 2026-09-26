@@ -18,6 +18,8 @@ TRACK_USE_KEEP = TRACK_USE_FOCUS_END
 TRACK_USE_SCORE = TRACK_USE_KEEP + 1
 TRACK_USE_COUNT = TRACK_USE_SCORE + 1
 track_use_indices = torch.arange(TRACK_USE_COUNT, dtype=torch.long, device=gpu_device)
+track_use_cost = torch.zeros((TRACK_USE_COUNT,), dtype=torch.uint8, device=gpu_device)
+track_use_cost[TRACK_USE_KEEP] = 1
 
 class PhaseStart(PhaseRule):
 
@@ -95,6 +97,7 @@ class PhaseStart(PhaseRule):
       track_indices.view(1, TRACK_CARD_COUNT),
       OBS_INT_CP+player_indices.view(PLAYER_COUNT, 1)
     ] -= track_cost.view(1, 1, 1, TRACK_CARD_COUNT)
+    states.obs_int[:, TRACK_USE_KEEP, player_indices, :, OBS_INT_CP+player_indices] -= 1
     states.obs_int[:, TRACK_USE_AP, :, :, OBS_INT_PHASE_AP] = \
       card_ap[track_card].view(state.batch[0], 1, TRACK_CARD_COUNT)
 
@@ -103,7 +106,10 @@ class PhaseStart(PhaseRule):
       # active player
       (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1))
       # enough cp to spend
-      & (state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1) >= track_cost.view(1, 1, 1, TRACK_CARD_COUNT))
+      & (state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1) >= (
+        track_cost.view(1, 1, 1, TRACK_CARD_COUNT))
+        + track_use_cost.view(1, TRACK_USE_COUNT, 1, 1)
+      )
       & torch.concat([
         # use any non-score card for ap
         track_score.logical_not().view(state.batch[0], 1, 1, TRACK_CARD_COUNT).repeat(1, 1, PLAYER_COUNT, 1),
@@ -128,4 +134,32 @@ class PhaseStart(PhaseRule):
 
     return self.concat_state_masks(enumerations)
 
+  def action_str(self):
+    return [
+      *[
+        f"play kept {c}"
+        for p in range(PLAYER_COUNT)
+        for c in card_name[:CARD_COUNT]
+      ],
+      *[
+        f"use ap on track {t}"
+        for p in range(PLAYER_COUNT)
+        for t in range(TRACK_CARD_COUNT)
+      ],
+      *[
+        f"use event on track {t}"
+        for p in range(PLAYER_COUNT)
+        for t in range(TRACK_CARD_COUNT)
+      ],
+      *[
+        f"keep track {t}"
+        for active_player in range(PLAYER_COUNT)
+        for t in range(TRACK_CARD_COUNT)
+      ],
+      *[
+        f"score track {t}"
+        for active_player in range(PLAYER_COUNT)
+        for t in range(TRACK_CARD_COUNT)
+      ],
+    ]
 

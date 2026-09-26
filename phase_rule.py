@@ -25,7 +25,11 @@ class PhaseRule(abc.ABC):
     pass
 
   @abc.abstractmethod
-  def enumerate_actions(self, state: game.ExpanseState, card_embeds: torch.nn.Embedding) -> tuple[game.ExpanseState, torch.Tensor]:
+  def enumerate_actions(self, state: game.ExpanseState, card_embeds: torch.nn.Embedding) -> tuple[game.ExpanseState, torch.Tensor] | game.ExpanseState:
+    pass
+
+  @abc.abstractmethod
+  def action_str(self) -> list[str] | str:
     pass
 
 

@@ -25,6 +25,7 @@ bonus_sector_points = torch.tensor([
   [3, 2],
   [3, 2],
 ], dtype=torch.int8, device=gpu_device)
+sector_name = ["Inner Planets", "Belt", "Outer Planets"]
 STARTING_BONUS_SECTORS = 2
 
 ORBITAL_COUNT = 8
@@ -41,11 +42,13 @@ orbital_adjacent = torch.tensor([
 ], dtype=torch.bool, device=gpu_device)
 player_home_orbital = torch.tensor([0, 1], dtype=torch.long, device=gpu_device)
 orbital_sector = torch.tensor([0, 0, 1, 1, 1, 1, 2, 2], dtype=torch.long, device=gpu_device)
+orbital_name = ["Earth", "Mars", "Ceres", "Tycho", "Eros", "Thoth", "Jupiter", "Saturn"]
 
 BASE_COUNT = 12
 base_indices = torch.arange(BASE_COUNT, dtype=torch.long, device=gpu_device)
 base_orbital = torch.tensor([0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 7, 7], dtype=torch.long, device=gpu_device)
 base_sector = orbital_sector[base_orbital]
+base_name = ["Eurasia", "Africa", "Mariner Valley", "Londres Nova", "Ceres", "Tycho", "Eros", "Thoth", "Europa", "Ganymede", "Rhea", "Titan"]
 
 TRACK_PRESENT = 0
 TRACK_SCORE = 1
@@ -71,6 +74,41 @@ card_ap = torch.tensor([
   4, 2, 3, 4, 3, 2, 3, 3, 2, 4,
   0, 0,
 ], dtype=torch.int8, device=gpu_device)
+card_name = [
+  "Drummer",
+  "Miller",
+  "Cotyar Ghazi",
+  "Mao-Kwikowski Mercantile",
+  "Assassin",
+  "Covert Op",
+  "Bush Naval Yards",
+  "Antony Dresden",
+  "Franklin DeGraff",
+  "Terraforming",
+  "Voices of Eros",
+  "Destruction of Deimos",
+  "Blockade of Earth",
+  "Blockade of Mars",
+  "Sadavir Errinwright",
+  "Slingshot Racing",
+  "Black Ops Team",
+  "Julie Mao",
+  "Star Helix",
+  "Riot Gear",
+  "The Hybrid",
+  "Nauvoo",
+  "Theresa Yao",
+  "Bobbie Draper",
+  "Ambush",
+  "Captain Yvgeny",
+  "Stealth Ships",
+  "Heavy Burn",
+  "Razorback",
+  "Admiral Souther",
+  "Score",
+  "empty",
+  "empty",
+]
 card_factions = torch.tensor([
   [True, False],
   [False, True],
@@ -153,6 +191,7 @@ template_starting_obs_bool = torch.tensor(
   + ([False] * 10)
   + ([False] * PLAYER_COUNT)
   + ([False] * PLAYER_COUNT)
+  + ([False] * PLAYER_COUNT)
   + ([False] * SECTOR_COUNT)
 , dtype=torch.bool, device=gpu_device)
 OBS_BOOL_LENGTH = template_starting_obs_bool.shape[0]
@@ -171,7 +210,8 @@ OBS_BOOL_PHASE_CHOOSE_EVENT = OBS_BOOL_PHASE_CHOOSE_SECTOR + 1
 OBS_BOOL_PHASE_DONE = OBS_BOOL_PHASE_CHOOSE_EVENT + 1
 OBS_BOOL_TURN = OBS_BOOL_PHASE_DONE + 1
 OBS_BOOL_ACTION = OBS_BOOL_TURN + PLAYER_COUNT
-OBS_BOOL_SCORE_SECTOR = OBS_BOOL_ACTION + PLAYER_COUNT
+OBS_BOOL_PERSPECTIVE = OBS_BOOL_ACTION + PLAYER_COUNT
+OBS_BOOL_SCORE_SECTOR = OBS_BOOL_PERSPECTIVE + PLAYER_COUNT
 OBS_BOOL_END = OBS_BOOL_SCORE_SECTOR + SECTOR_COUNT
 assert OBS_BOOL_END == OBS_BOOL_LENGTH
 
@@ -279,6 +319,14 @@ class ExpanseState():
       obs_pile_cached_embed=self.obs_pile_cached_embed[*index, :, :],
       hid_bool=self.hid_bool[*index, :]
     )
+  
+  def set_index(self, index: tuple, other: typing.Self):
+    self.obs_bool[*index, :] = other.obs_bool
+    self.obs_int[*index, :] = other.obs_int
+    self.obs_slot_index[*index, :] = other.obs_slot_index
+    self.obs_pile_present[*index, :, :] = other.obs_pile_present
+    self.obs_pile_cached_embed[*index, :, :] = other.obs_pile_cached_embed
+    self.hid_bool[*index, :] = other.hid_bool
 
   def clone(self, *args, **kwargs) -> typing.Self:
     return ExpanseState(
@@ -312,15 +360,14 @@ class ExpanseState():
     )
 
 
-  def generate_empty(card_embeds: torch.nn.Embedding) -> typing.Self:
+  def generate_empty(card_embeds: torch.nn.Embedding, BATCH: int = 0) -> typing.Self:
     return ExpanseState(
-      obs_bool=torch.zeros((0, OBS_BOOL_LENGTH), dtype=torch.bool, device=gpu_device),
-      obs_int=torch.zeros((0, OBS_INT_LENGTH), dtype=torch.int8, device=gpu_device),
-      obs_slot_index=torch.zeros((0, OBS_SLOT_INDEX_COUNT), dtype=torch.long, device=gpu_device),
-      obs_pile_present=torch.zeros((0, OBS_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
-      obs_pile_cached_embed=torch.zeros((0, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float16, device=gpu_device),
-      hid_bool=torch.zeros((0, HID_BOOL_LENGTH), dtype=torch.bool, device=gpu_device),
-      batch_indices=[torch.zeros((0,), dtype=torch.long, device=gpu_device)]
+      obs_bool=torch.zeros((BATCH, OBS_BOOL_LENGTH), dtype=torch.bool, device=gpu_device),
+      obs_int=torch.zeros((BATCH, OBS_INT_LENGTH), dtype=torch.int8, device=gpu_device),
+      obs_slot_index=torch.zeros((BATCH, OBS_SLOT_INDEX_COUNT), dtype=torch.long, device=gpu_device),
+      obs_pile_present=torch.zeros((BATCH, OBS_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
+      obs_pile_cached_embed=torch.zeros((BATCH, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float32, device=gpu_device),
+      hid_bool=torch.zeros((BATCH, HID_BOOL_LENGTH), dtype=torch.bool, device=gpu_device)
     )
 
   def generate_starting(BATCH: int, card_embeds: torch.nn.Embedding) -> typing.Self:
@@ -329,12 +376,13 @@ class ExpanseState():
       obs_int=template_starting_obs_int.view(1, OBS_INT_LENGTH).repeat(BATCH, 1),
       obs_slot_index=torch.zeros((BATCH, OBS_SLOT_INDEX_COUNT), dtype=torch.long, device=gpu_device),
       obs_pile_present=torch.ones((BATCH, OBS_PILE_PRESENT_COUNT, CARD_COUNT), dtype=torch.bool, device=gpu_device),
-      obs_pile_cached_embed=torch.zeros((BATCH, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float16, device=gpu_device),
+      obs_pile_cached_embed=torch.zeros((BATCH, OBS_PILE_CACHED_EMBED_COUNT, card_embeds.embedding_dim), dtype=torch.float32, device=gpu_device),
       hid_bool=template_starting_hid_bool.view(1, HID_BOOL_LENGTH).repeat(BATCH, 1)
     )
 
     state.obs_bool[state.batch_indices[0], OBS_BOOL_TURN+torch.randint(0, PLAYER_COUNT, (BATCH,), device=gpu_device)] = True
     state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT]
+    state.obs_bool[:, OBS_BOOL_PERSPECTIVE:OBS_BOOL_PERSPECTIVE+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT]
 
     state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 

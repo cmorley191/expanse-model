@@ -20,4 +20,6 @@ class PhaseEvent_Placeholder(PhaseRule):
 
     return new_state
   
+  def action_str(self):
+    return "event placeholder"
 

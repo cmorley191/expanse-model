@@ -23,3 +23,6 @@ class PhaseNonscoreTurnDone(PhaseRule):
     new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
 
     return new_state
+
+  def action_str(self):
+    return ""

@@ -72,3 +72,14 @@ class PhaseInitiative(PhaseRule):
     mask = mask.view(state.batch[0], INITIATIVE_USE_COUNT * PLAYER_COUNT)
 
     return (states, mask)
+
+  def action_str(self):
+    return [
+      u
+      for u in [
+        "use focused event",
+        "keep focused card",
+        "skip initiative opportunity",
+      ]
+      for p in range(PLAYER_COUNT)
+    ]

@@ -16,11 +16,6 @@ class PhaseAP(PhaseRule):
     state.obs_int[..., OBS_INT_PHASE_AP] -= 1
     state.obs_bool[..., OBS_BOOL_PHASE_ACTION] = state.obs_int[..., OBS_INT_PHASE_AP].bool()
     state.obs_bool[..., OBS_BOOL_PHASE_ACTION_DONE] = state.obs_bool[..., OBS_BOOL_PHASE_ACTION].logical_not()
-    #assert PLAYER_COUNT == 2
-    state.obs_bool[..., OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = (
-      state.obs_bool[..., OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT]
-      .logical_xor(state.obs_bool[..., OBS_BOOL_PHASE_ACTION_DONE].view(*state.batch, 1))
-    )
 
 
   def enumerate_fleet(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
@@ -38,7 +33,7 @@ class PhaseAP(PhaseRule):
       player_indices.view(1, 1, PLAYER_COUNT), 
       orbital_indices.view(1, ORBITAL_COUNT, 1),
       player_indices.view(1, 1, PLAYER_COUNT)
-    ] -= fleet_indices.view(FLEET_COUNT, 1, 1, 1, 1)
+    ] -= fleet_indices.view(FLEET_COUNT, 1, 1, 1, 1) + 1
     states_fleets[
       :, 
       fleet_indices.view(FLEET_COUNT, 1, 1),
@@ -47,14 +42,14 @@ class PhaseAP(PhaseRule):
       player_indices.view(1, 1, PLAYER_COUNT), 
       orbital_indices.view(1, ORBITAL_COUNT, 1),
       player_indices.view(1, 1, PLAYER_COUNT)
-    ] += fleet_indices.view(FLEET_COUNT, 1, 1, 1, 1)
+    ] += fleet_indices.view(FLEET_COUNT, 1, 1, 1, 1) + 1
     
     state_fleets = state.obs_int_fleets()
     mask = (
       # active player
       (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, 1, PLAYER_COUNT))
       # has enough fleets
-      & (state_fleets.view(state.batch[0], 1, ORBITAL_COUNT, 1, PLAYER_COUNT) >= fleet_indices.view(1, FLEET_COUNT, 1, 1, 1))
+      & (state_fleets.view(state.batch[0], 1, ORBITAL_COUNT, 1, PLAYER_COUNT) > fleet_indices.view(1, FLEET_COUNT, 1, 1, 1))
       # adjacent
       & (orbital_adjacent.view(1, 1, ORBITAL_COUNT, ORBITAL_COUNT, 1))
     )
@@ -132,6 +127,27 @@ class PhaseAP(PhaseRule):
 
     return self.concat_state_masks(enumerations)
 
+  def action_str(self):
+    return [
+      *[
+        f"Move {c+1} from {s} to {d}"
+        for c in range(FLEET_COUNT)
+        for s in orbital_name
+        for d in orbital_name
+        for p in range(PLAYER_COUNT)
+      ],
+      *[
+        f"Place on {b}"
+        for b in base_name
+        for p in range(PLAYER_COUNT)
+      ],
+      *[
+        f"Build a fleet"
+        for p in range(PLAYER_COUNT)
+      ],
+      "Pass remaining points"
+    ]
+
 
 class PhaseAPTurn_APDone(PhaseRule):
 
@@ -149,7 +165,10 @@ class PhaseAPTurn_APDone(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_ACTION_DONE] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
-    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
+    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
+    new_state.obs_bool[:, OBS_BOOL_PERSPECTIVE:OBS_BOOL_PERSPECTIVE+PLAYER_COUNT] = new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT]
 
     return new_state
 
+  def action_str(self):
+    return ""

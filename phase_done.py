@@ -7,9 +7,6 @@ import torch
 class PhaseDone(PhaseRule):
 
   def get_type(self):
-    return PHASE_TYPE_DETERMINISTIC
-
-  def is_nature(self):
     return PHASE_TYPE_STOCHASTIC
 
   def matching(self, state):
@@ -25,6 +22,7 @@ class PhaseDone(PhaseRule):
     #assert PLAYER_COUNT == 2
     new_state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT] = new_state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT].logical_not()
     new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = new_state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT]
+    new_state.obs_bool[:, OBS_BOOL_PERSPECTIVE:OBS_BOOL_PERSPECTIVE+PLAYER_COUNT] = new_state.obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT]
     #assert NONSCORES_NOT_IN_A_PILE > 0   # to avoid /-by-0
     new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1] = torch.multinomial(
       torch.concat([
@@ -43,6 +41,7 @@ class PhaseDone(PhaseRule):
       ], dim=1),
       1
     ).view(state.batch[0])
+    new_state.obs_pile_present[:, OBS_PILE_PRESENT_DECK, new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1]] = False
     new_state.obs_pile_cached_embed[:, OBS_PILE_CACHED_EMBED_DECK, :] -= card_embeds(new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1])
     new_pile = (new_state.obs_int[:, OBS_INT_DECK_PILE_NONSCORES] + new_state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 1)
     new_state.obs_int[:, OBS_INT_DECK_PILE_SCORES] = torch.where(
@@ -65,4 +64,6 @@ class PhaseDone(PhaseRule):
 
     return new_state
 
+  def action_str(self):
+    return "next turn"
 

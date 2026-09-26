@@ -11,7 +11,7 @@ phase_rules = get_phases()
 for rule in phase_rules:
   print(f'{rule.get_type()} {rule}')
 
-card_embeds = torch.nn.Embedding(num_embeddings=CARD_COUNT+EXTRA_CARD_INDEX_COUNT, embedding_dim=8, device=gpu_device)
+card_embeds = torch.nn.Embedding(num_embeddings=CARD_COUNT+EXTRA_CARD_INDEX_COUNT, embedding_dim=8, dtype=torch.float32, device=gpu_device)
 card_embeds.weight.requires_grad = False
 
 TOTAL_BATCH = 8192 * 2
@@ -64,7 +64,7 @@ while unsorted_state.batch[0] != 0:
   processing_state_count = largest_rules_cumsum[included_largest_rules.shape[0] - 1].item()
   print(f'processing {processing_state_count} games ({processing_state_count * 100 / TOTAL_BATCH:.1f}%) from {included_largest_rules.shape[0]} / {len(phase_rules)} rules')
   for i_rule in included_largest_rules:
-    state = ExpanseState.concat(sorted_states[i_rule], dim=0)
+    state: ExpanseState = ExpanseState.concat(sorted_states[i_rule], dim=0)
     sorted_states[i_rule] = [ExpanseState.generate_empty(card_embeds)]
 
     if phase_rules[i_rule].get_type() == PHASE_TYPE_CHOICE:

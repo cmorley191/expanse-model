@@ -21,13 +21,56 @@ class PhaseScore_Sector(PhaseRule):
     states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
     states.obs_bool[:, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = \
       state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
-    
+
     states: ExpanseState = states.repeat(1, SECTOR_COUNT)
     states.hid_bool[:, sector_indices, HID_BOOL_SCORE_SECTOR+sector_indices] = True
+
+    states.obs_bool[:, sector_indices, OBS_BOOL_SCORE_SECTOR+sector_indices] = True
+    states.obs_int[:, sector_indices, OBS_INT_BONUS_SECTORS+sector_indices] -= 1
 
     mask = (state.obs_int[:, OBS_INT_BONUS_SECTORS+sector_indices] != 0)
 
     return (states, mask)
+
+  def action_str(self):
+    return [f"Choose sector {s}" for s in sector_name]
+  
+
+class PhaseScore_SwitchPerspective(PhaseRule):
+
+  def get_type(self):
+    return PHASE_TYPE_DETERMINISTIC
+  
+  def matching(self, state):
+    return (
+      state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
+      & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
+      & state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PERSPECTIVE])
+    )
+  
+  def enumerate_actions(self, state, card_embeds):
+    new_state = state.clone()
+    reveal_sectors = state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_TURN]).logical_not()
+    new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = (
+      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT]
+      & reveal_sectors.view(state.batch[0], 1)
+    )
+    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] += (
+      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
+      * (
+        1
+        - (
+          reveal_sectors.to(torch.int8).view(state.batch[0], 1)
+          * 2
+        )
+      )
+    )
+    new_state.obs_bool[:, OBS_BOOL_PERSPECTIVE:OBS_BOOL_PERSPECTIVE+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT]
+
+    return new_state
+
+  def action_str(self):
+    return ""
 
 
 class PhaseScore_Event(PhaseRule):
@@ -39,6 +82,7 @@ class PhaseScore_Event(PhaseRule):
     return (
       state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
       & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
+      & state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PERSPECTIVE]).logical_not()
     )
   
   def enumerate_use_event(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
@@ -87,6 +131,16 @@ class PhaseScore_Event(PhaseRule):
     ]]
 
     return self.concat_state_masks(enumerations)
+  
+  def action_str(self):
+    return [
+      *[
+        a
+        for active_player in range(PLAYER_COUNT)
+        for a in [f"play kept {c}" for c in card_name[:CARD_COUNT]]
+      ],
+      "skip score event opportunity"
+    ]
 
 
 class PhaseScore_OpponentEventDone(PhaseRule):
@@ -108,12 +162,12 @@ class PhaseScore_OpponentEventDone(PhaseRule):
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
     new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
-    new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = \
-      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT]
-    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] -= \
-      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
+    # but don't switch perspective here
 
     return new_state
+  
+  def action_str(self):
+    return ""
 
 
 class PhaseScore_TurnPlayerEventDone(PhaseRule):
@@ -136,6 +190,9 @@ class PhaseScore_TurnPlayerEventDone(PhaseRule):
     new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
 
     return new_state
+  
+  def action_str(self):
+    return ""
 
 
 class PhaseScore_Score(PhaseRule):
@@ -192,3 +249,5 @@ class PhaseScore_Score(PhaseRule):
 
     return new_state
 
+  def action_str(self):
+    return "Score!"
