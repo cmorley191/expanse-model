@@ -11,14 +11,15 @@ gpu_device = torch.device('cuda')
 phase_rules = get_phases()
 for rule in phase_rules:
   print(f'{rule.get_type()} {rule}')
+from phase_event import event_implemented
 
 
-LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_3_weights___4858_281674.pth")
+LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_5_weights___256_10127.pth")
 
 make_model = (
   lambda log: (
     model.ExpanseModel_Centauri(
-      hidden_lengths=[128, 64],
+      hidden_lengths=[128, 64, 64],
       card_embed_length=8,
       log=log
     )
@@ -62,6 +63,7 @@ while not (
   print(f'CP: {state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].tolist()}')
   print(f'Score Sector: {state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT].tolist()}')
   print(f'Sectors remaining: {state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT].tolist()}')
+  print(f'Non-implemented events: {", ".join([card_name[i] for i in range(CARD_COUNT) if not event_implemented[i].item()])}')
 
   rule = [r for r in phase_rules if r.matching(state).item()]
   print(rule)

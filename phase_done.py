@@ -34,16 +34,18 @@ class PhaseDone(PhaseRule):
               state.obs_int[:, OBS_INT_DECK_PILE_NONSCORES]
               + (state.obs_int[:, OBS_INT_DECK_PILES] * 8)
               + NONSCORES_NOT_IN_A_PILE
-            )
+            ).float()
           ).view(state.batch[0], 1)
         ),
         state.obs_int[:, OBS_INT_DECK_PILE_SCORES].float().view(state.batch[0], 1)
       ], dim=1),
       1
     ).view(state.batch[0])
-    new_state.obs_pile_present[:, OBS_PILE_PRESENT_DECK, new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1]] = False
+    # set present to false, unless this is a score card
+    new_state.obs_pile_present[state.batch_indices[0], OBS_PILE_PRESENT_DECK, new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1] % CARD_COUNT] &= \
+      (new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1] == CARD_SCORE)
     new_state.obs_pile_cached_embed[:, OBS_PILE_CACHED_EMBED_DECK, :] -= card_embeds(new_state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1])
-    new_pile = (new_state.obs_int[:, OBS_INT_DECK_PILE_NONSCORES] + new_state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 1)
+    new_pile = ((state.obs_int[:, OBS_INT_DECK_PILE_NONSCORES] + state.obs_int[:, OBS_INT_DECK_PILE_SCORES]) == 1)
     new_state.obs_int[:, OBS_INT_DECK_PILE_SCORES] = torch.where(
       new_pile,
       SCORES_PER_PILE,

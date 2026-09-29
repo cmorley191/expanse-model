@@ -40,6 +40,13 @@ class PhaseRule(abc.ABC):
     return (states, mask)
 
 
+class PhaseEventMeta(abc.ABC):
+
+  @abc.abstractmethod
+  def card(self) -> int:
+    pass
+
+
 def get_phases() -> list[PhaseRule]:
   instances = []
     
@@ -73,3 +80,40 @@ def get_phases() -> list[PhaseRule]:
       raise
           
   return instances
+
+
+def get_phase_event_metas() -> list[PhaseEventMeta | None]:
+  instances: list[PhaseEventMeta] = []
+    
+  for _, module_name, _ in pkgutil.iter_modules([os.path.abspath(".")]):
+    if (not module_name.startswith('phase_event_')):
+      continue
+
+    try:
+      module = importlib.import_module(module_name)
+      
+      for name, obj in inspect.getmembers(module, inspect.isclass):
+        if (
+          (obj.__module__ != module.__name__)
+          or (not name.startswith('PhaseEventMeta_'))
+          or (not issubclass(obj, PhaseEventMeta))
+        ):
+          continue
+
+        try:
+          instances.append(obj())
+        except:
+          print(f"Could not instantiate {name}")
+          raise
+                
+    except:
+      print(f"Error processing module {module_name}")
+      raise
+  
+  events = [None] * (game.CARD_COUNT + game.EXTRA_CARD_INDEX_COUNT)
+  for m in instances:
+    card = m.card()
+    assert events[card] is None
+    events[m.card()] = m
+
+  return events

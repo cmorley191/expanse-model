@@ -21,17 +21,19 @@ for rule in phase_rules:
 
 # SAVE_WEIGHTS_FILENAME: network weights are saved here at intervals (with an automatic number added to the name)
 WEIGHTS_DIR = "weights"
-SAVE_WEIGHTS_FILENAME = "0_centauri_3_weights___.pth"
+SAVE_WEIGHTS_FILENAME = "0_centauri_5_weights___.pth"
 SAVE_RATE_EPISODES = 10_000
 # LOAD_WEIGHTS_FILENAME: the network will load these weights if this file exists (see pausing/resuming training below)
-LOAD_WEIGHTS_FILENAME = "0_centauri_3_weights___.pth"
+LOAD_WEIGHTS_FILENAME = "0_centauri_4_weights___11090_936366.pth"
 STARTING_I_STEP = -1
 STARTING_I_EPISODE = 0
+
+LAMBDA = 0.98
 
 make_model = (
   lambda log: (
     model.ExpanseModel_Centauri(
-      hidden_lengths=[128, 64],
+      hidden_lengths=[128, 64, 64],
       card_embed_length=8,
       log=log
     )
@@ -95,10 +97,11 @@ def optimize():
 def main():
   #torch.autograd.detect_anomaly(True)
   with torch.no_grad():
-    N = 8192
+    N = 4096 + 2048
     n_indices = torch.arange(N, dtype=torch.long, device=gpu_device)
     M = 1024
     MAX_C = 300
+    actual_max_c = 0
     c_indices = torch.arange(MAX_C, dtype=torch.long, device=gpu_device)
 
     card_embeds = explore_model.card_embeds
@@ -107,27 +110,45 @@ def main():
       BATCH=N,
       card_embeds=card_embeds
     )
+    series = torch.zeros((N,), dtype=torch.int32, device=gpu_device)
     history: ExpanseState = (
       ExpanseState.generate_empty(card_embeds, BATCH=N)
       .view(N, 1)
       .repeat(1, MAX_C)
     )
+    history_values = torch.zeros((N, MAX_C), dtype=torch.float32, device=gpu_device)
     history_length = torch.zeros((N,), dtype=torch.long, device=gpu_device)
+    lambda_matrix = (
+      (LAMBDA ** (c_indices.view(1, 1, MAX_C) - c_indices.view(1, MAX_C, 1)))
+      * (c_indices.view(1, 1, MAX_C) >= c_indices.view(1, MAX_C, 1)).float()
+    )
 
   i_step = STARTING_I_STEP
   i_episode = STARTING_I_EPISODE
   last_save_episode = STARTING_I_EPISODE
   while True:
     i_step += 1
-    with torch.no_grad():    
-      print(f'step {i_step} -- episode {i_episode}: ', end='')
+    with torch.no_grad():
+      print(f'step {i_step} -- episode {i_episode} -- actual max c {actual_max_c}: ', end='')
+
+      min_series = series.min()
 
       for rule in phase_rules:
         if rule.get_type() == PHASE_TYPE_CHOICE:
           continue
 
-        rule_matches = rule.matching(state).clone()
-        state.set_index((rule_matches,), rule.enumerate_actions(state.index(rule_matches), card_embeds))
+        rm = rule.matching(state).clone()
+
+        match_n_indices = n_indices[rm]
+        match_history_length = history_length[rm]
+        history.set_index((match_n_indices, match_history_length), state.index(rm))
+        #assert first rule is always a choice / not in this loop
+        history_values[match_n_indices, match_history_length] = history_values[match_n_indices, match_history_length-1]
+        history_length[rm] += 1
+        state.set_index((rm,), rule.enumerate_actions(state.index(rm), card_embeds))
+
+      rule_matches = [rule.matching(state).clone() for rule in phase_rules]
+      min_series_available = sum([(series[rm] == min_series).int().sum() for rm in rule_matches])
 
       state_ended = (
         (state.obs_int[:, OBS_INT_DECK_PILES] < 0)
@@ -136,47 +157,54 @@ def main():
           & (state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 0)
         )
       )
+      ended_n_indices = n_indices[state_ended]
+      ended_lengths = history_length[state_ended]
+      actual_max_c = max(actual_max_c, history_length.max(dim=0).values.item())
+      history_values[ended_n_indices, ended_lengths] = (state.obs_int[:, OBS_INT_CP] - state.obs_int[:, OBS_INT_CP+1])[state_ended].float()
       ended_history_mask = (
         state_ended.view(N, 1)
         & (c_indices.view(1, MAX_C) < history_length.view(N, 1))
       )
+      history_values[state_ended, :] = (
+        history_values.view(N, 1, MAX_C)
+        * lambda_matrix
+      ).sum(dim=2)[state_ended, :]
       memory.push_all((
         history.obs_bool[ended_history_mask],
         history.obs_int[ended_history_mask],
         history.obs_slot_index[ended_history_mask],
         history.obs_pile_present[ended_history_mask],
-        (
-          (state.obs_int[:, OBS_INT_CP] - state.obs_int[:, OBS_INT_CP+1])
-          .view(N, 1, 1).repeat(1, MAX_C, 1)
-          [ended_history_mask]
-        )
+        history_values[ended_history_mask].view(-1, 1)
       ))
+      history_values[state_ended, :] = 0
       history_length[state_ended] = 0
       ended_count = state_ended.sum().item()
       i_episode += ended_count
       state.set_index((state_ended,), ExpanseState.generate_starting(ended_count, card_embeds))
+      series[state_ended] += 1
 
-      for rule in phase_rules:
+      min_series_available = 0
+      for (rule, rm) in zip(phase_rules, rule_matches):
         if rule.get_type() != PHASE_TYPE_CHOICE:
           print(f'.', end='')
           continue
 
-        rule_matches = rule.matching(state).clone()
-        
-        i_match = rule_matches.long().cumsum(dim=0)
+        i_match = rm.int().cumsum(dim=0)
         match_count = i_match[-1].item()
 
-        if match_count < M:
+        if (match_count < M) and not (
+          min_series_available < M
+          and (series[rm] == min_series).int().sum() > 0
+        ):
           print(f'n', end='')
           continue
         print(f'Y', end='')
 
-        history.set_index((n_indices[rule_matches], history_length[rule_matches]), state.index(rule_matches))
-        history_length[rule_matches] += 1
+        history.set_index((n_indices[rm], history_length[rm]), state.index(rm))
 
-        mini_batch_count = math.ceil(i_match[-1].item() / M)
+        mini_batch_count = math.ceil(match_count / M)
         mini_batch_masks = (
-          rule_matches.view(1, N)
+          rm.view(1, N)
           & ((i_match // M).view(1, N) == torch.arange(mini_batch_count, dtype=torch.long, device=gpu_device).view(mini_batch_count, 1))
         )
         for i_mini_batch in range(mini_batch_count):
@@ -218,6 +246,11 @@ def main():
             )
           )
           i_selected = action_dist.sample()
+
+          minibatch_n_indices = n_indices[mini_batch_masks[i_mini_batch, :]]
+          minibatch_lengths = history_length[mini_batch_masks[i_mini_batch, :]]
+          history_values[minibatch_n_indices, minibatch_lengths] = model_value.max(dim=1).values * (1 - LAMBDA)
+          history_length[mini_batch_masks[i_mini_batch, :]] += 1
 
           state.set_index(
             (mini_batch_masks[i_mini_batch],), 

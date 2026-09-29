@@ -14,6 +14,7 @@ assert torch.cuda.is_available()
 PLAYER_COUNT = 2
 assert PLAYER_COUNT == 2  # needed by many phase rules
 player_indices = torch.arange(PLAYER_COUNT, dtype=torch.long, device=gpu_device)
+player_name = ["M", "U"]
 
 SECTOR_COUNT = 3
 sector_indices = torch.arange(SECTOR_COUNT, dtype=torch.long, device=gpu_device)
@@ -28,6 +29,11 @@ bonus_sector_points = torch.tensor([
 sector_name = ["Inner Planets", "Belt", "Outer Planets"]
 STARTING_BONUS_SECTORS = 2
 
+BAND_COUNT = 4
+band_indices = torch.arange(BAND_COUNT, dtype=torch.long, device=gpu_device)
+band_sector = torch.tensor([0, 1, 2, 2], dtype=torch.long, device=gpu_device)
+band_name = ["Inner Planets", "Belt", "Jupiter", "Saturn"]
+
 ORBITAL_COUNT = 8
 orbital_indices = torch.arange(ORBITAL_COUNT, dtype=torch.long, device=gpu_device)
 orbital_adjacent = torch.tensor([
@@ -41,12 +47,14 @@ orbital_adjacent = torch.tensor([
   [False, False, False, False, False, False, True, False],
 ], dtype=torch.bool, device=gpu_device)
 player_home_orbital = torch.tensor([0, 1], dtype=torch.long, device=gpu_device)
-orbital_sector = torch.tensor([0, 0, 1, 1, 1, 1, 2, 2], dtype=torch.long, device=gpu_device)
+orbital_band = torch.tensor([0, 0, 1, 1, 1, 1, 2, 3], dtype=torch.long, device=gpu_device)
+orbital_sector = band_sector[orbital_band]
 orbital_name = ["Earth", "Mars", "Ceres", "Tycho", "Eros", "Thoth", "Jupiter", "Saturn"]
 
 BASE_COUNT = 12
 base_indices = torch.arange(BASE_COUNT, dtype=torch.long, device=gpu_device)
 base_orbital = torch.tensor([0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 7, 7], dtype=torch.long, device=gpu_device)
+base_band = orbital_band[base_orbital]
 base_sector = orbital_sector[base_orbital]
 base_name = ["Eurasia", "Africa", "Mariner Valley", "Londres Nova", "Ceres", "Tycho", "Eros", "Thoth", "Europa", "Ganymede", "Rhea", "Titan"]
 
@@ -158,6 +166,19 @@ SCORES_PER_PILE = 2
 NONSCORES_PER_PILE = 8
 NONSCORES_NOT_IN_A_PILE = CARD_COUNT - TRACK_CARD_COUNT - (STARTING_DECK_PILE_COUNT * NONSCORES_PER_PILE)
 assert NONSCORES_NOT_IN_A_PILE > 0  # needed for phase_done
+
+
+RESOURCE_FOOD = 0
+RESOURCE_WATER = 1
+RESOURCE_MINERALS = 2
+RESOURCE_TECH = 3
+RESOURCE_COUNT = 4
+resource_indices = torch.arange(RESOURCE_COUNT, dtype=torch.long, device=gpu_device)
+base_resource = torch.tensor([
+  RESOURCE_FOOD, RESOURCE_WATER, RESOURCE_MINERALS, RESOURCE_TECH,
+  RESOURCE_MINERALS, RESOURCE_TECH, RESOURCE_MINERALS, RESOURCE_TECH,
+  RESOURCE_WATER, RESOURCE_FOOD, RESOURCE_FOOD, RESOURCE_WATER
+], dtype=torch.long, device=gpu_device)
 
 
 starting_fleets = [
