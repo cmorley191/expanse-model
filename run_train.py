@@ -22,13 +22,13 @@ for rule in phase_rules:
 # SAVE_WEIGHTS_FILENAME: network weights are saved here at intervals (with an automatic number added to the name)
 WEIGHTS_DIR = "weights"
 SAVE_WEIGHTS_FILENAME = "0_centauri_5_weights___.pth"
-SAVE_RATE_EPISODES = 10_000
+SAVE_RATE_EPISODES = 50_000
 # LOAD_WEIGHTS_FILENAME: the network will load these weights if this file exists (see pausing/resuming training below)
-LOAD_WEIGHTS_FILENAME = "0_centauri_4_weights___11090_936366.pth"
-STARTING_I_STEP = -1
-STARTING_I_EPISODE = 0
+LOAD_WEIGHTS_FILENAME = "0_centauri_5_weights___37865_1582252.pth"
+STARTING_I_STEP = 37865
+STARTING_I_EPISODE = 1582252
 
-LAMBDA = 0.98
+LAMBDA = 0.99
 
 make_model = (
   lambda log: (

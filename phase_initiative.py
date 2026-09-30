@@ -35,7 +35,7 @@ class PhaseInitiative(PhaseRule):
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PHASE_DONE] = True
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
     states.obs_slot_index[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
-    states.obs_int[:, INITIATIVE_USE_KEEP, player_indices, OBS_INT_CP+player_indices] -= 1
+    states.obs_int[:, INITIATIVE_USE_KEEP, player_indices, OBS_INT_CP+player_indices] -= card_keep_cost[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]].view(state.batch[0], 1)
     states.obs_pile_cached_embed[:, INITIATIVE_USE_KEEP, player_indices, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] += \
       card_embeds(focus_card).view(state.batch[0], 1, state.CARD_EMBED_LENGTH)
     states.obs_pile_present[
@@ -57,7 +57,10 @@ class PhaseInitiative(PhaseRule):
         ],
         # eligible to keep
         (
-          (state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT) != 0)
+          (
+            state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT) 
+            >= card_keep_cost[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]].view(state.batch[0], 1, 1)
+          )
           & card_factions[
             focus_card.view(state.batch[0], 1, 1),
             player_indices.view(1, 1, PLAYER_COUNT)

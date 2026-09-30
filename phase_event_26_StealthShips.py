@@ -43,7 +43,10 @@ class PhaseEvent_26_StealthShips(PhaseRule):
 
     state_fleets = state.obs_int_fleets()
     mask = (
-      orbital_adjacent.view(1, 1, ORBITAL_COUNT, ORBITAL_COUNT)
+      (
+        orbital_adjacent.view(1, 1, ORBITAL_COUNT, ORBITAL_COUNT)
+        | torch.eye(ORBITAL_COUNT, dtype=torch.bool, device=gpu_device).view(1, 1, ORBITAL_COUNT, ORBITAL_COUNT)
+      )
       & (
         # opponent
         state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, 1, PLAYER_COUNT)

@@ -247,6 +247,9 @@ class PhaseScore_Score(PhaseRule):
       ).sum(dim=1)
     )
 
+    new_state.obs_int_fleets()[:, player_home_orbital[player_indices], player_indices] += \
+      (obs_int_fleets.sum(dim=1) < FLEET_COUNT).to(torch.int8)
+
     return new_state
 
   def action_str(self):

@@ -123,10 +123,10 @@ class PhaseEvent_17_JulieMao(PhaseRule):
   def action_str(self):
     return [
       *[
-        ", ".join([f"remove {b}" for b in pair])
-        for pair in event_pair_indices.tolist()
+        ", ".join([f"remove {base_name[b]}" for b in pair])
+        for pair in event_pairs.tolist()
       ],
-      *[f"remove {b}" for b in range(BASE_COUNT)],
+      *[f"remove {b}" for b in base_name],
       "Cannot remove"
     ]
 

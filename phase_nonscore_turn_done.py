@@ -19,7 +19,7 @@ class PhaseNonscoreTurnDone(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_TURN_TYPE_START:OBS_BOOL_PHASE_TURN_TYPE_END] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
-    new_state.obs_bool[:, OBS_BOOL_PHASE_DONE] = True
+    new_state.obs_bool[:, OBS_BOOL_PHASE_DONE] = True # TODO oops: play kept event turn should not draw a new card
     new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
 
     return new_state

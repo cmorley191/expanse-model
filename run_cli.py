@@ -14,7 +14,7 @@ for rule in phase_rules:
 from phase_event import event_implemented
 
 
-LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_5_weights___256_10127.pth")
+LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_5_weights___31557_1332140.pth")
 
 make_model = (
   lambda log: (

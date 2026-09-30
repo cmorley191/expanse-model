@@ -46,7 +46,7 @@ orbital_adjacent = torch.tensor([
   [False, False, True, True, True, True, False, True],
   [False, False, False, False, False, False, True, False],
 ], dtype=torch.bool, device=gpu_device)
-player_home_orbital = torch.tensor([0, 1], dtype=torch.long, device=gpu_device)
+player_home_orbital = torch.tensor([1, 0], dtype=torch.long, device=gpu_device)
 orbital_band = torch.tensor([0, 0, 1, 1, 1, 1, 2, 3], dtype=torch.long, device=gpu_device)
 orbital_sector = band_sector[orbital_band]
 orbital_name = ["Earth", "Mars", "Ceres", "Tycho", "Eros", "Thoth", "Jupiter", "Saturn"]
