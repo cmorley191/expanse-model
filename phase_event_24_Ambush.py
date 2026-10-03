@@ -27,6 +27,7 @@ class PhaseEvent_24_Ambush(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1, 1)
     states.obs_bool[:, :, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, 2, 2, ORBITAL_COUNT)

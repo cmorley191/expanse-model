@@ -14,7 +14,7 @@ for rule in phase_rules:
 card_embeds = torch.nn.Embedding(num_embeddings=CARD_COUNT+EXTRA_CARD_INDEX_COUNT, embedding_dim=8, dtype=torch.float32, device=gpu_device)
 card_embeds.weight.requires_grad = False
 
-TOTAL_BATCH = 8192 * 3
+TOTAL_BATCH = 8192 * 2
 unsorted_state = ExpanseState.generate_starting(
   BATCH=TOTAL_BATCH,
   card_embeds=card_embeds
@@ -64,13 +64,16 @@ while unsorted_state.batch[0] != 0:
   processing_state_count = largest_rules_cumsum[included_largest_rules.shape[0] - 1].item()
   print(f'processing {processing_state_count} games ({processing_state_count * 100 / TOTAL_BATCH:.1f}%) from {included_largest_rules.shape[0]} / {len(phase_rules)} rules')
   for i_rule in included_largest_rules:
+    #print(phase_rules[i_rule])
     state: ExpanseState = ExpanseState.concat(sorted_states[i_rule], dim=0)
     sorted_states[i_rule] = [ExpanseState.generate_empty(card_embeds)]
 
     if phase_rules[i_rule].get_type() == PHASE_TYPE_CHOICE:
       torch.cuda.synchronize()
-      (action_states, action_mask) = phase_rules[i_rule].enumerate_actions(state, card_embeds)
+      ret = phase_rules[i_rule].enumerate_actions(state, card_embeds)
       torch.cuda.synchronize()
+      assert type(ret) == type(tuple()), f'bad return {phase_rules[i_rule]}'
+      (action_states, action_mask) = ret
       assert action_states.batch == action_mask.shape, f'bad action shapes {phase_rules[i_rule]}'
 
       assert action_mask.any(dim=1).all(), f'blank action mask {phase_rules[i_rule]}'
@@ -88,6 +91,7 @@ while unsorted_state.batch[0] != 0:
       torch.cuda.synchronize()
       new_state = phase_rules[i_rule].enumerate_actions(state, card_embeds)
       torch.cuda.synchronize()
+      assert new_state is not None, f'bad return {phase_rules[i_rule]}'
       assert state.batch == new_state.batch, f'bad new state shape {phase_rules[i_rule]}'
       next_unsorted_states.append(new_state)
 
@@ -124,19 +128,20 @@ while unsorted_state.batch[0] != 0:
         next_unsorted_states[-1].obs_pile_present[:, OBS_PILE_PRESENT_DECK, :].any(dim=1)
         | next_unsorted_states[-1].obs_int[:, OBS_INT_DECK_PILE_SCORES].bool()
       ).logical_not()]}'
-    assert (next_unsorted_states[-1].obs_bool[:, OBS_BOOL_TURN:OBS_BOOL_TURN+PLAYER_COUNT].int().sum(dim=1) == 1).all(), f'Bad turn after {phase_rules[i_rule]}'
-    assert (next_unsorted_states[-1].obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].int().sum(dim=1) <= 1).all(), f'Bad action after {phase_rules[i_rule]}'
+    assert (next_unsorted_states[-1].obs_bool[:, OBS_BOOL_PLAYER_TURN:OBS_BOOL_PLAYER_TURN+PLAYER_COUNT].int().sum(dim=1) == 1).all(), f'Bad turn after {phase_rules[i_rule]}'
+    assert (next_unsorted_states[-1].obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].int().sum(dim=1) <= 1).all(), f'Bad action after {phase_rules[i_rule]}'
     non_piles_mask = torch.ones((OBS_INT_LENGTH,), dtype=torch.bool, device=gpu_device)
     non_piles_mask[OBS_INT_DECK_PILES] = False
     assert (next_unsorted_states[-1].obs_int[:, non_piles_mask] >= 0).all(), f'Negative after rule {phase_rules[i_rule]}\n\n'\
       f'before:\n' \
-      f'{state.obs_int[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)]}\n' \
+      f'{state.obs_bool[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)][:5]}\n' \
+      f'{state.obs_int[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)][:5]}\n' \
       f'action:\n' \
       f'{None if phase_rules[i_rule].get_type() != PHASE_TYPE_CHOICE else i_selected[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)]}\n' \
       f'[{None if phase_rules[i_rule].get_type() != PHASE_TYPE_CHOICE else '; '.join([phase_rules[i_rule].action_str()[i] for i in i_selected[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1).tolist()]])}\n' \
       f'{None if phase_rules[i_rule].get_type() != PHASE_TYPE_CHOICE else action_mask[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)]}\n' \
       f'after:\n' \
-      f'{next_unsorted_states[-1].obs_int[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)]}\n'
+      f'{next_unsorted_states[-1].obs_int[(next_unsorted_states[-1].obs_int[:, :] < 0).any(dim=1)][:5]}\n'
 
   next_unsorted_state: ExpanseState = ExpanseState.concat([
     ExpanseState.generate_empty(card_embeds),

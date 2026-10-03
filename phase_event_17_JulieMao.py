@@ -38,6 +38,7 @@ class PhaseEvent_17_JulieMao(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, EVENT_PAIR_COUNT)
@@ -50,13 +51,13 @@ class PhaseEvent_17_JulieMao(PhaseRule):
     ] -= (
       (
         # opponent
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
         # has influence
         & state_influence[:, event_pairs, :].bool()
       )
       | (
         # self
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
         # opponent has no influence
         & state_influence[:, event_pairs, :].bool().flip(dims=[3]).logical_not()
       )
@@ -74,6 +75,7 @@ class PhaseEvent_17_JulieMao(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, BASE_COUNT)
@@ -81,13 +83,13 @@ class PhaseEvent_17_JulieMao(PhaseRule):
     states.obs_int_influence()[:, base_indices, base_indices, :] -= (
       (
         # opponent
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
         # has influence
         & state_influence.bool()
       )
       | (
         # self
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
         # opponent has no influence
         & state_influence.bool().flip(dims=[2]).logical_not()
       )
@@ -105,6 +107,7 @@ class PhaseEvent_17_JulieMao(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     mask = state.obs_int_influence().bool().any(dim=1).all(dim=1).logical_not().view(state.batch[0], 1)

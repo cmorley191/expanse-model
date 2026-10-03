@@ -32,16 +32,17 @@ class PhaseEvent_10_VoicesEros(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], *([1] * SECTOR_COUNT))
     states.obs_bool[:, :, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, *sector_base_count)
     states_influence = states.obs_int_influence()
     states_influence[:, sector_base_indices[0], :, :, sector_bases[0], :] += \
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, 1, PLAYER_COUNT)
     states_influence[:, :, sector_base_indices[1], :, sector_bases[1], :] += \
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, 1, PLAYER_COUNT)
     states_influence[:, :, :, sector_base_indices[2], sector_bases[2], :] += \
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, 1, PLAYER_COUNT)
 
     states: ExpanseState = states.view(state.batch[0], sector_base_count[0] * sector_base_count[1] * sector_base_count[2])
     mask = torch.ones(states.batch, dtype=torch.bool, device=gpu_device)

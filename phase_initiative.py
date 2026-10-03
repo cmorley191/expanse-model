@@ -31,9 +31,12 @@ class PhaseInitiative(PhaseRule):
 
     states: ExpanseState = states.view(state.batch[0], 1, 1).repeat(1, INITIATIVE_USE_COUNT, PLAYER_COUNT)
     states.obs_bool[:, INIITATIVE_USE_EVENT, :, OBS_BOOL_PHASE_EVENT] = True
+    states.obs_bool[:, INIITATIVE_USE_EVENT, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PHASE_AP_TURN] = False
     states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PHASE_DONE] = True
-    states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
+    states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT] = False
+    states.obs_bool[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_BOOL_PLAYER_PERSPECTIVE:OBS_BOOL_PLAYER_PERSPECTIVE+PLAYER_COUNT] = False
     states.obs_slot_index[:, INITIATIVE_USE_NON_FOCUS_START:INITIATIVE_USE_NON_FOCUS_END, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
     states.obs_int[:, INITIATIVE_USE_KEEP, player_indices, OBS_INT_CP+player_indices] -= card_keep_cost[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]].view(state.batch[0], 1)
     states.obs_pile_cached_embed[:, INITIATIVE_USE_KEEP, player_indices, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] += \
@@ -48,7 +51,7 @@ class PhaseInitiative(PhaseRule):
 
     mask = (
       # active player
-      (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT))
+      (state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT))
       & torch.concat([
         # eligible to use
         card_factions[

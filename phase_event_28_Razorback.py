@@ -27,21 +27,22 @@ class PhaseEvent_28_Razorback(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, ORBITAL_COUNT, ORBITAL_COUNT)
     states_fleets = states.obs_int_fleets()
     states_fleets[:, orbital_indices, :, orbital_indices, :] -= (
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(1, state.batch[0], 1, PLAYER_COUNT)
     )
     states_fleets[:, :, orbital_indices, orbital_indices, :] += (
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
     )
 
     mask = (
       (
         # turn player
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
         # with source fleet
         & state.obs_int_fleets().bool().view(state.batch[0], ORBITAL_COUNT, 1, PLAYER_COUNT)
         # exists
@@ -58,12 +59,13 @@ class PhaseEvent_28_Razorback(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     mask = (
       (
         # turn player
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT)
         # with no fleets
         & state.obs_int_fleets().bool().any(dim=1).logical_not().view(state.batch[0], PLAYER_COUNT)
         # exists

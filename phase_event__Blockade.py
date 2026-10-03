@@ -48,6 +48,7 @@ class PhaseEvent__Blockade(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, EVENT_BASE_COUNT, EVENT_BASE_COUNT+1)
@@ -58,14 +59,14 @@ class PhaseEvent__Blockade(PhaseRule):
       :,
       event_card_bases[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]],
       :
-    ] += state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
+    ] += state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
     states_influence[
       state.batch_indices[0].view(state.batch[0], 1),
       :,
       event_card_base_indices.view(1, EVENT_BASE_COUNT),
       event_card_bases[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]],
       :
-    ] -= state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
+    ] -= state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
   
     state_event_card_orbital_fleets = state.obs_int_fleets()[
       state.batch_indices[0],
@@ -77,14 +78,14 @@ class PhaseEvent__Blockade(PhaseRule):
         (
           (
             # action player
-            state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT]
+            state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT]
             # with orbital control
             & (state_event_card_orbital_fleets > state_event_card_orbital_fleets.flip(dims=[1]))
             # exists
           ).any(dim=1).view(state.batch[0], 1, 1)
           & (
             # removal player
-            state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
+            state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
             # with influence on removal base
             & (
               state.obs_int_influence()[

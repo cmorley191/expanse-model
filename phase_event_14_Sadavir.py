@@ -27,6 +27,7 @@ class PhaseEvent_14_Sadavir(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = True
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     new_state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
     new_state.obs_int_influence()[:, :, :] -= (state.obs_int_influence()[:, :, :] > 2).to(torch.int8)
 

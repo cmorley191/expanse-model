@@ -52,9 +52,10 @@ class PhaseEvent__Influence(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = True
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     new_state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
     new_state.obs_int_influence()[:, :, :] += (
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
       & event_card_base[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS]].view(state.batch[0], BASE_COUNT, 1)
     ).to(torch.int8)
 

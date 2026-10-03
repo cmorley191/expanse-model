@@ -48,6 +48,8 @@ class PhaseEventMeta(abc.ABC):
 
 
 def get_phases() -> list[PhaseRule]:
+  import phase_event
+
   instances = []
     
   for _, module_name, _ in pkgutil.iter_modules([os.path.abspath(".")]):
@@ -78,7 +80,11 @@ def get_phases() -> list[PhaseRule]:
     except:
       print(f"Error processing module {module_name}")
       raise
-          
+
+  # finally got them all implemented
+  assert (phase_event.event_implemented | game.card_runnable.logical_not())[:game.CARD_COUNT].all(), \
+    f'Expected all runnable events to be implemented: {phase_event.event_implemented[:game.CARD_COUNT]}'
+
   return instances
 
 

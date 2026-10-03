@@ -19,8 +19,9 @@ class PhaseScore_Sector(PhaseRule):
     #assert PLAYER_COUNT == 2
     states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_SECTOR] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
-    states.obs_bool[:, :, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = \
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+    # perspective switches in next phase rule
 
     states: ExpanseState = states.repeat(1, SECTOR_COUNT)
     states.hid_bool[:, sector_indices, HID_BOOL_SCORE_SECTOR+sector_indices] = True
@@ -45,27 +46,25 @@ class PhaseScore_SwitchPerspective(PhaseRule):
     return (
       state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
       & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
-      & state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PERSPECTIVE])
+      & state.obs_bool[:, OBS_BOOL_PLAYER_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PLAYER_PERSPECTIVE])
     )
   
   def enumerate_actions(self, state, card_embeds):
     new_state = state.clone()
-    reveal_sectors = state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_TURN]).logical_not()
+    reveal_sectors = (
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PLAYER_TURN]).logical_not()
+      | state.obs_bool[:, OBS_BOOL_SCORE_SECTOR_REVEALED_TO_ALL]
+    )
     new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = (
       state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT]
       & reveal_sectors.view(state.batch[0], 1)
     )
-    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] += (
-      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
-      * (
-        1
-        - (
-          reveal_sectors.to(torch.int8).view(state.batch[0], 1)
-          * 2
-        )
-      )
+    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] = (
+      new_state.hid_int[:, HID_INT_BONUS_SECTORS:HID_INT_BONUS_SECTORS+SECTOR_COUNT]
+      - new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
     )
-    new_state.obs_bool[:, OBS_BOOL_PERSPECTIVE:OBS_BOOL_PERSPECTIVE+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT]
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_PERSPECTIVE:OBS_BOOL_PLAYER_PERSPECTIVE+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT]
 
     return new_state
 
@@ -73,7 +72,7 @@ class PhaseScore_SwitchPerspective(PhaseRule):
     return ""
 
 
-class PhaseScore_Event(PhaseRule):
+class PhaseScore_ChooseEvent(PhaseRule):
   
   def get_type(self):
     return PHASE_TYPE_CHOICE
@@ -82,7 +81,7 @@ class PhaseScore_Event(PhaseRule):
     return (
       state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
       & state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT]
-      & state.obs_bool[:, OBS_BOOL_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PERSPECTIVE]).logical_not()
+      & state.obs_bool[:, OBS_BOOL_PLAYER_ACTION].logical_xor(state.obs_bool[:, OBS_BOOL_PLAYER_PERSPECTIVE]).logical_not()
     )
   
   def enumerate_use_event(self, state: ExpanseState, card_embeds: torch.nn.Embedding):
@@ -90,6 +89,7 @@ class PhaseScore_Event(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1).repeat(1, PLAYER_COUNT, CARD_COUNT)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_CHOOSE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = True
+    states.obs_bool[:, player_indices, :, OBS_BOOL_PLAYER_EVENT+player_indices] = True
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = card_indices.view(1, 1, CARD_COUNT)
     states.obs_pile_cached_embed[:, player_indices, :, OBS_PILE_CACHED_EMBED_KEPT+player_indices, :] -= card_embeds.weight[:CARD_COUNT, :].view(1, 1, CARD_COUNT, state.CARD_EMBED_LENGTH)
     states.obs_pile_present[
@@ -102,7 +102,7 @@ class PhaseScore_Event(PhaseRule):
 
     mask = (
       # active player
-      (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
+      (state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
       # has card
       & (state.obs_pile_present[:, OBS_PILE_PRESENT_KEPT:OBS_PILE_PRESENT_KEPT+PLAYER_COUNT, :])
     )
@@ -153,7 +153,7 @@ class PhaseScore_OpponentEventDone(PhaseRule):
     return (
       state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
       & state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE]
-      & (state.obs_bool[:, OBS_BOOL_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_ACTION]))
+      & (state.obs_bool[:, OBS_BOOL_PLAYER_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_PLAYER_ACTION]))
     )
   
   def enumerate_actions(self, state, card_embeds):
@@ -161,8 +161,8 @@ class PhaseScore_OpponentEventDone(PhaseRule):
     #assert PLAYER_COUNT == 2
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_CHOOSE_EVENT] = True
-    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
-    # but don't switch perspective here
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT] = state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not()
+    # perspective switches in phase rule above
 
     return new_state
   
@@ -180,14 +180,15 @@ class PhaseScore_TurnPlayerEventDone(PhaseRule):
     return (
       state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN]
       & state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE]
-      & (state.obs_bool[:, OBS_BOOL_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_ACTION]).logical_not())
+      & (state.obs_bool[:, OBS_BOOL_PLAYER_TURN].logical_xor(state.obs_bool[:, OBS_BOOL_PLAYER_ACTION]).logical_not())
     )
   
   def enumerate_actions(self, state, card_embeds):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_DONE] = True
-    new_state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT] = False
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT] = False
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_PERSPECTIVE:OBS_BOOL_PLAYER_PERSPECTIVE+PLAYER_COUNT] = False
 
     return new_state
   
@@ -211,6 +212,9 @@ class PhaseScore_Score(PhaseRule):
     new_state.obs_bool[:, OBS_BOOL_PHASE_SCORE_TURN] = False
     new_state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT] = False
     new_state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT] = False
+    new_state.hid_int[:, HID_INT_BONUS_SECTORS:HID_INT_BONUS_SECTORS+SECTOR_COUNT] -= \
+      state.hid_bool[:, HID_BOOL_SCORE_SECTOR:HID_BOOL_SCORE_SECTOR+SECTOR_COUNT].to(torch.int8)
+    new_state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT] = new_state.hid_int[:, HID_INT_BONUS_SECTORS:HID_INT_BONUS_SECTORS+SECTOR_COUNT]
     obs_int_fleets = state.obs_int_fleets()
     obs_int_influence = state.obs_int_influence()
     #assert PLAYER_COUNT == 2

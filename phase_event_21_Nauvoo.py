@@ -28,6 +28,7 @@ class PhaseEvent_21_Nauvoo(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     state_influence = state.obs_int_influence()
@@ -35,11 +36,11 @@ class PhaseEvent_21_Nauvoo(PhaseRule):
     states: ExpanseState = states.repeat(1, BASE_COUNT)
     states.obs_int_influence()[:, base_indices, base_indices, :] -= (
       (
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
         & state_influence.bool()
       )
       | (
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
         & (state_influence.flip(dims=[2]) == 0)
       )
     ).to(torch.int8)
@@ -53,6 +54,7 @@ class PhaseEvent_21_Nauvoo(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     state_fleets = state.obs_int_fleets()
@@ -60,11 +62,11 @@ class PhaseEvent_21_Nauvoo(PhaseRule):
     states: ExpanseState = states.repeat(1, ORBITAL_COUNT)
     states.obs_int_fleets()[:, orbital_indices, orbital_indices, :] -= (
       (
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, PLAYER_COUNT)
         & state_fleets.bool()
       )
       | (
-        state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
+        state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT)
         & (state_fleets.flip(dims=[2]) == 0)
       )
     ).to(torch.int8)
@@ -77,7 +79,7 @@ class PhaseEvent_21_Nauvoo(PhaseRule):
     enumerations = [f(state, card_embeds) for f in [
       self.enumerate_influence,
       self.enumerate_fleet,
-      # technically there should be a pass option but it is so unlikely, if not impossible,
+      # TODO: technically there should be a pass option but it is so unlikely, if not impossible,
       # for all players to have no influence and no fleet on the board
     ]]
 

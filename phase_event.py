@@ -5,10 +5,7 @@ import torch
 
 
 event_metas = get_phase_event_metas()
-event_implemented = torch.tensor([
-  *[True if m is not None else False for m in event_metas],
-  *([False] * EXTRA_CARD_INDEX_COUNT)
-], dtype=torch.bool, device=gpu_device)
+event_implemented = torch.tensor([True if m is not None else False for m in event_metas], dtype=torch.bool, device=gpu_device)
 
 class PhaseEvent_NotImplemented(PhaseRule):
 
@@ -25,6 +22,7 @@ class PhaseEvent_NotImplemented(PhaseRule):
     new_state = state.clone()
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT] = False
     new_state.obs_bool[:, OBS_BOOL_PHASE_EVENT_DONE] = True
+    new_state.obs_bool[:, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     new_state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     return new_state

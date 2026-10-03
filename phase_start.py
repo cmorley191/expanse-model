@@ -35,6 +35,8 @@ class PhaseStart(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_START] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
 
     states: ExpanseState = states.repeat(1, PLAYER_COUNT, CARD_COUNT)
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = card_indices.view(1, CARD_COUNT)
@@ -43,7 +45,7 @@ class PhaseStart(PhaseRule):
 
     mask = (
       # active player
-      (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
+      (state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], PLAYER_COUNT, 1))
       # has card kept
       & (state.obs_pile_present[:, OBS_PILE_PRESENT_KEPT+player_indices, :])
     )
@@ -59,9 +61,11 @@ class PhaseStart(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1, 1).repeat(1, TRACK_USE_COUNT, 1, 1)
     states.obs_bool[:, :, :, :, OBS_BOOL_PHASE_START] = False
     states.obs_bool[:, TRACK_USE_AP, :, :, OBS_BOOL_PHASE_AP_TURN] = True
-    states.obs_bool[:, TRACK_USE_AP, :, :, OBS_BOOL_PHASE_ACTION] = True
+    states.obs_bool[:, TRACK_USE_AP, :, :, OBS_BOOL_PHASE_CHOOSE_MAO_KWIK] = True
     states.obs_bool[:, TRACK_USE_EVENT, :, :, OBS_BOOL_PHASE_EVENT_TURN] = True
     states.obs_bool[:, TRACK_USE_EVENT, :, :, OBS_BOOL_PHASE_EVENT] = True
+    states.obs_bool[:, TRACK_USE_EVENT, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = \
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
     states.obs_bool[:, TRACK_USE_KEEP, :, :, OBS_BOOL_PHASE_EVENT_TURN] = True
     states.obs_bool[:, TRACK_USE_KEEP, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
     states.obs_bool[:, TRACK_USE_SCORE, :, :, OBS_BOOL_PHASE_SCORE_TURN] = True
@@ -104,7 +108,7 @@ class PhaseStart(PhaseRule):
     track_score = (track_card == CARD_SCORE)
     mask = (
       # active player
-      (state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1))
+      (state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1))
       # enough cp to spend
       & (state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].view(state.batch[0], 1, PLAYER_COUNT, 1) >= (
         track_cost.view(1, 1, 1, TRACK_CARD_COUNT))

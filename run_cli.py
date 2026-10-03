@@ -1,6 +1,8 @@
 
 from game import *
 from phase_rule import *
+import phase_event_20_Hybrid
+import phase_done
 
 import model
 
@@ -14,7 +16,7 @@ for rule in phase_rules:
 from phase_event import event_implemented
 
 
-LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_5_weights___31557_1332140.pth")
+LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_6_weights___18843_600158.pth")
 
 make_model = (
   lambda log: (
@@ -29,14 +31,39 @@ make_model = (
 eval_model = make_model(log=True)
 
 assert os.path.exists(LOAD_WEIGHTS_PATH), f'not found: {LOAD_WEIGHTS_PATH}'
+print(f'LOADING WEIGHTS: {LOAD_WEIGHTS_PATH}')
 eval_model.load_state_dict(torch.load(LOAD_WEIGHTS_PATH))
 
 
 card_embeds = eval_model.card_embeds
 state: ExpanseState = ExpanseState.generate_starting(1, card_embeds)
+print(f"Starting player: {player_name[state.obs_bool[:, OBS_BOOL_PLAYER_TURN:OBS_BOOL_PLAYER_TURN+PLAYER_COUNT].int().argmax()]}")
 print("Starting track:")
 for i_track in range(TRACK_CARD_COUNT):
   print(card_name[state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+i_track].item()])
+
+for i_track in range(TRACK_CARD_COUNT):
+  draw = None
+  while draw is None:
+    print(f"Enter override track {i_track}: (optional)")
+    draw = input().strip()
+    if draw == "":
+      break
+    else:
+      try:
+        draw = int(draw)
+      except:
+        draw = None
+        continue
+      break
+  if draw == "":
+    break
+  state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+i_track] = draw
+
+else:
+  print("Starting track:")
+  for i_track in range(TRACK_CARD_COUNT):
+    print(card_name[state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+i_track].item()])
 
 user_player = None
 while type(user_player) != type('') or len(user_player) != 1 or user_player not in 'MU':
@@ -60,6 +87,7 @@ while not (
   print(f'Step {i_step}')
   print(f'Top track: {card_name[state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT-1].item()]}')
   print(f'Focus: {card_name[state.obs_slot_index[:, OBS_SLOT_INDEX_FOCUS].item()]}')
+  print(f'Revealed deck top: {card_name[state.obs_slot_index[:, OBS_SLOT_INDEX_REVEALED_DECK_TOP].item()]}')
   print(f'CP: {state.obs_int[:, OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].tolist()}')
   print(f'Score Sector: {state.obs_bool[:, OBS_BOOL_SCORE_SECTOR:OBS_BOOL_SCORE_SECTOR+SECTOR_COUNT].tolist()}')
   print(f'Sectors remaining: {state.obs_int[:, OBS_INT_BONUS_SECTORS:OBS_INT_BONUS_SECTORS+SECTOR_COUNT].tolist()}')
@@ -72,10 +100,39 @@ while not (
 
   if rule.get_type() != PHASE_TYPE_CHOICE:
     print(f"Executing: {rule.action_str()}")
+
+    if (type(rule) == phase_done.PhaseDone):
+      while True:
+        print(f"Enter override draw: (optional)")
+        draw = input().strip()
+        if draw == "":
+          break
+        else:
+          try:
+            draw = int(draw)
+          except:
+            continue
+          state.obs_slot_index[:, OBS_SLOT_INDEX_REVEALED_DECK_TOP] = draw
+          break
+
     state = rule.enumerate_actions(state, card_embeds)
 
+    if (type(rule) == phase_event_20_Hybrid.PhaseEvent_20_Hybrid_Draw):
+      while True:
+        print(f"Enter override reveal: (optional)")
+        reveal = input().strip()
+        if reveal == "":
+          break
+        else:
+          try:
+            reveal = int(reveal)
+          except:
+            continue
+          state.obs_slot_index[:, OBS_SLOT_INDEX_REVEALED_DECK_TOP] = reveal
+          break
+
   else:
-    user_plays = state.obs_bool[:, OBS_BOOL_ACTION+user_player].item()
+    user_plays = state.obs_bool[:, OBS_BOOL_PLAYER_ACTION+user_player].item()
 
     (action_states, action_masks) = rule.enumerate_actions(state, card_embeds)
     action_str = rule.action_str()
@@ -113,7 +170,7 @@ while not (
         (
           1 
           - (
-            state.obs_bool[:, OBS_BOOL_ACTION+1].to(torch.float32).view(1)
+            state.obs_bool[:, OBS_BOOL_PLAYER_ACTION+1].to(torch.float32).view(1)
             * 2
           )
         )

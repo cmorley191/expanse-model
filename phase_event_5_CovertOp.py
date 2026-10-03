@@ -28,6 +28,7 @@ class PhaseEvent_5_CovertOp(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, BASE_COUNT, BASE_COUNT)
@@ -52,6 +53,7 @@ class PhaseEvent_5_CovertOp(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     mask = state.obs_int_influence().bool().any(dim=1).all(dim=1).logical_not().view(state.batch[0], 1)

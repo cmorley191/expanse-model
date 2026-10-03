@@ -21,14 +21,14 @@ for rule in phase_rules:
 
 # SAVE_WEIGHTS_FILENAME: network weights are saved here at intervals (with an automatic number added to the name)
 WEIGHTS_DIR = "weights"
-SAVE_WEIGHTS_FILENAME = "0_centauri_5_weights___.pth"
+SAVE_WEIGHTS_FILENAME = "0_centauri_6_weights___.pth"
 SAVE_RATE_EPISODES = 50_000
 # LOAD_WEIGHTS_FILENAME: the network will load these weights if this file exists (see pausing/resuming training below)
-LOAD_WEIGHTS_FILENAME = "0_centauri_5_weights___37865_1582252.pth"
-STARTING_I_STEP = 37865
-STARTING_I_EPISODE = 1582252
+LOAD_WEIGHTS_FILENAME = "0_centauri_6_weights___18843_600158.pth"
+STARTING_I_STEP = 18843
+STARTING_I_EPISODE = 600158
 
-LAMBDA = 0.99
+LAMBDA = 0.98
 
 make_model = (
   lambda log: (
@@ -97,9 +97,9 @@ def optimize():
 def main():
   #torch.autograd.detect_anomaly(True)
   with torch.no_grad():
-    N = 4096 + 2048
+    N = 4096+2048
     n_indices = torch.arange(N, dtype=torch.long, device=gpu_device)
-    M = 1024
+    M = 2048
     MAX_C = 300
     actual_max_c = 0
     c_indices = torch.arange(MAX_C, dtype=torch.long, device=gpu_device)
@@ -232,7 +232,7 @@ def main():
             (
               1 
               - (
-                mini_batch.obs_bool[:, OBS_BOOL_ACTION+1].to(torch.float32).view(m, 1)
+                mini_batch.obs_bool[:, OBS_BOOL_PLAYER_ACTION+1].to(torch.float32).view(m, 1)
                 * 2
               )
             )

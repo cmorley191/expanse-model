@@ -30,10 +30,11 @@ class PhaseEvent_18_StarHelix(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, BASE_COUNT, BASE_COUNT)
-    remove_player = state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not()
+    remove_player = state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not()
     states_influence = states.obs_int_influence()
     states_influence[:, base_indices, :, base_indices, :] -= remove_player.bool().to(torch.int8).view(1, state.batch[0], 1, PLAYER_COUNT)
     states_influence[:, :, base_indices, base_indices, :] -= remove_player.bool().to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
@@ -61,12 +62,13 @@ class PhaseEvent_18_StarHelix(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1, 1)
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     states: ExpanseState = states.repeat(1, event_single_counts.shape[0], BASE_COUNT)
     states_influence = states.obs_int_influence()
     states_influence[:, :, base_indices, base_indices, :] -= (
-      state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().bool().to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
+      state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().bool().to(torch.int8).view(state.batch[0], 1, 1, PLAYER_COUNT)
       * event_single_counts.view(1, event_single_counts.shape[0], 1, 1)
     )
 
@@ -75,13 +77,13 @@ class PhaseEvent_18_StarHelix(PhaseRule):
       (
         (
           # turn player
-          state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
+          state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].view(state.batch[0], 1, 1, PLAYER_COUNT)
           # with influence
           & state_influence.bool().view(state.batch[0], 1, BASE_COUNT, PLAYER_COUNT)
         )
         | (
           # opponent
-          state.obs_bool[:, OBS_BOOL_ACTION:OBS_BOOL_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
+          state.obs_bool[:, OBS_BOOL_PLAYER_ACTION:OBS_BOOL_PLAYER_ACTION+PLAYER_COUNT].logical_not().view(state.batch[0], 1, 1, PLAYER_COUNT)
           # with enough influence
           & (
             state_influence.view(state.batch[0], 1, BASE_COUNT, PLAYER_COUNT)
@@ -102,6 +104,7 @@ class PhaseEvent_18_StarHelix(PhaseRule):
     states: ExpanseState = state.clone().view(state.batch[0], 1)
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT] = False
     states.obs_bool[:, :, OBS_BOOL_PHASE_EVENT_DONE] = True
+    states.obs_bool[:, :, OBS_BOOL_PLAYER_EVENT:OBS_BOOL_PLAYER_EVENT+PLAYER_COUNT] = False
     states.obs_slot_index[:, :, OBS_SLOT_INDEX_FOCUS] = CARD_EMPTY_FOCUS
 
     mask = torch.ones((state.batch[0], 1), dtype=torch.bool, device=gpu_device)
