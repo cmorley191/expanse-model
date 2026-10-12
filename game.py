@@ -355,6 +355,40 @@ class ExpanseState():
     """(*batch, base, player)"""
     return self.obs_int[..., OBS_INT_INFLUENCE:OBS_INT_INFLUENCE+(BASE_COUNT*PLAYER_COUNT)].view(*self.batch, BASE_COUNT, PLAYER_COUNT)
 
+  def ended_and_scores(self):
+    """(ended: (*batch,),  current/final-scores: (*batch, player))"""
+    ended = (
+      (self.obs_int[..., OBS_INT_DECK_PILES] < 0)
+      | (
+        (self.obs_int[..., OBS_INT_DECK_PILES] == 0)
+        & (self.obs_int[..., OBS_INT_DECK_PILE_SCORES] == 0)
+      )
+    )
+
+    scores = self.obs_int[..., OBS_INT_CP:OBS_INT_CP+PLAYER_COUNT].clone()
+
+    obs_int_fleets = self.obs_int_fleets()
+    obs_int_influence = self.obs_int_influence()
+    #assert PLAYER_COUNT == 2
+    orbital_control = (
+      (obs_int_fleets != 0)
+      & (obs_int_fleets > obs_int_fleets.flip(dims=[-1]))
+    )
+    base_present = obs_int_influence != 0
+    base_orbital_control_power_bonus = base_present & orbital_control[..., base_orbital, :]
+    base_power = obs_int_influence + base_orbital_control_power_bonus
+    base_control = (
+      base_present
+      & (base_power > base_power.flip(dims=[-1]))
+    )
+
+    scores += (
+      ended.to(torch.int8).view(*self.batch, 1)
+      * base_control.to(torch.int8).sum(dim=-2)
+    )
+
+    return (ended, scores)
+
 
   def concat(elements: list[typing.Self], dim: int) -> typing.Self:
     return ExpanseState(
@@ -466,6 +500,4 @@ class ExpanseState():
       - (card_embeds(state.obs_slot_index[:, OBS_SLOT_INDEX_TRACK:OBS_SLOT_INDEX_TRACK+TRACK_CARD_COUNT]).sum(dim=1))
     )
     return state
-
-
 

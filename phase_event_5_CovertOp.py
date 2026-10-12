@@ -71,9 +71,9 @@ class PhaseEvent_5_CovertOp(PhaseRule):
   def action_str(self):
     return [
       *[
-        f"Swap 1 {player_name[0]} {orbital_name[o0]} influence with 1 {player_name[1]} {orbital_name[o1]} influence"
-        for o0 in range(ORBITAL_COUNT)
-        for o1 in range(ORBITAL_COUNT)
+        f"Swap 1 {player_name[0]} {base_name[b0]} influence with 1 {player_name[1]} {base_name[b1]} influence"
+        for b0 in range(BASE_COUNT)
+        for b1 in range(BASE_COUNT)
       ],
       "Cannot perform swap"
     ]

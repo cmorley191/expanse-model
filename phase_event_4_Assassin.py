@@ -76,7 +76,7 @@ class PhaseEvent_4_Assassin_Discard(PhaseRule):
 
   def action_str(self):
     return [
-      *[f"discard {c}" for c in card_name],
+      *[f"discard {c}" for c in card_name[:CARD_COUNT]],
       "no kept cards to discard",
     ]
 

@@ -147,13 +147,7 @@ while unsorted_state.batch[0] != 0:
     ExpanseState.generate_empty(card_embeds),
     *[s for s in next_unsorted_states if s.batch[0] != 0],
   ], dim=0)
-  ended_state_mask: torch.Tensor = (
-    (next_unsorted_state.obs_int[:, OBS_INT_DECK_PILES] < 0)
-    | (
-      (next_unsorted_state.obs_int[:, OBS_INT_DECK_PILES] == 0)
-      & (next_unsorted_state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 0)
-    )
-  )
+  (ended_state_mask, _) = next_unsorted_state.ended_and_scores()
   ended_states.append(next_unsorted_state.index(ended_state_mask))
   unsorted_state: ExpanseState = next_unsorted_state.index(ended_state_mask.logical_not())
 

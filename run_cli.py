@@ -16,12 +16,12 @@ for rule in phase_rules:
 from phase_event import event_implemented
 
 
-LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_6_weights___18843_600158.pth")
+LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_7_weights___48463_1500502.pth")
 
 make_model = (
   lambda log: (
     model.ExpanseModel_Centauri(
-      hidden_lengths=[128, 64, 64],
+      hidden_lengths=[128, 128, 64, 64],
       card_embed_length=8,
       log=log
     )
@@ -44,7 +44,7 @@ for i_track in range(TRACK_CARD_COUNT):
 
 for i_track in range(TRACK_CARD_COUNT):
   draw = None
-  while draw is None:
+  while draw is None or draw < 0 or draw > CARD_SCORE:
     print(f"Enter override track {i_track}: (optional)")
     draw = input().strip()
     if draw == "":
@@ -72,13 +72,8 @@ while type(user_player) != type('') or len(user_player) != 1 or user_player not 
 user_player = 'MU'.index(user_player)
 
 i_step = -1
-while not (
-  (state.obs_int[:, OBS_INT_DECK_PILES] < 0)
-  | (
-    (state.obs_int[:, OBS_INT_DECK_PILES] == 0)
-    & (state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 0)
-  )
-).item():
+(ended, scores) = state.ended_and_scores()
+while not ended.item():
   i_step += 1
   print()
   print()
@@ -112,6 +107,8 @@ while not (
             draw = int(draw)
           except:
             continue
+          if draw < 0 or draw > CARD_SCORE:
+            continue
           state.obs_slot_index[:, OBS_SLOT_INDEX_REVEALED_DECK_TOP] = draw
           break
 
@@ -127,6 +124,8 @@ while not (
           try:
             reveal = int(reveal)
           except:
+            continue
+          if reveal < 0 or reveal > CARD_SCORE:
             continue
           state.obs_slot_index[:, OBS_SLOT_INDEX_REVEALED_DECK_TOP] = reveal
           break
@@ -190,9 +189,11 @@ while not (
       action = actions_ranked[0].item()
       state = action_states.index(state.batch_indices[0], action)
 
+  (ended, scores) = state.ended_and_scores()
+
 
 print(f'Ended')
 print(f'Final score:')
-print(f'MCR {'(user): ' if user_player == 0 else '(model)'}: {state.obs_int[:, OBS_INT_CP].item()}')
-print(f'UN  {'(user): ' if user_player == 1 else '(model)'}: {state.obs_int[:, OBS_INT_CP+1].item()}')
+print(f'MCR {'(user): ' if user_player == 0 else '(model)'}: {scores[:, 0].item()}')
+print(f'UN  {'(user): ' if user_player == 1 else '(model)'}: {scores[:, 1].item()}')
 

@@ -21,19 +21,19 @@ for rule in phase_rules:
 
 # SAVE_WEIGHTS_FILENAME: network weights are saved here at intervals (with an automatic number added to the name)
 WEIGHTS_DIR = "weights"
-SAVE_WEIGHTS_FILENAME = "0_centauri_6_weights___.pth"
+SAVE_WEIGHTS_FILENAME = "0_centauri_7_weights___.pth"
 SAVE_RATE_EPISODES = 50_000
 # LOAD_WEIGHTS_FILENAME: the network will load these weights if this file exists (see pausing/resuming training below)
-LOAD_WEIGHTS_FILENAME = "0_centauri_6_weights___18843_600158.pth"
-STARTING_I_STEP = 18843
-STARTING_I_EPISODE = 600158
+LOAD_WEIGHTS_FILENAME = "0_centauri_7_weights___48463_1500502.pth"
+STARTING_I_STEP = -1
+STARTING_I_EPISODE = 0
 
 LAMBDA = 0.98
 
 make_model = (
   lambda log: (
     model.ExpanseModel_Centauri(
-      hidden_lengths=[128, 64, 64],
+      hidden_lengths=[128, 128, 64, 64],
       card_embed_length=8,
       log=log
     )
@@ -97,7 +97,7 @@ def optimize():
 def main():
   #torch.autograd.detect_anomaly(True)
   with torch.no_grad():
-    N = 4096+2048
+    N = 4096 + 2048
     n_indices = torch.arange(N, dtype=torch.long, device=gpu_device)
     M = 2048
     MAX_C = 300
@@ -150,17 +150,11 @@ def main():
       rule_matches = [rule.matching(state).clone() for rule in phase_rules]
       min_series_available = sum([(series[rm] == min_series).int().sum() for rm in rule_matches])
 
-      state_ended = (
-        (state.obs_int[:, OBS_INT_DECK_PILES] < 0)
-        | (
-          (state.obs_int[:, OBS_INT_DECK_PILES] == 0)
-          & (state.obs_int[:, OBS_INT_DECK_PILE_SCORES] == 0)
-        )
-      )
+      (state_ended, state_scores) = state.ended_and_scores()
       ended_n_indices = n_indices[state_ended]
       ended_lengths = history_length[state_ended]
       actual_max_c = max(actual_max_c, history_length.max(dim=0).values.item())
-      history_values[ended_n_indices, ended_lengths] = (state.obs_int[:, OBS_INT_CP] - state.obs_int[:, OBS_INT_CP+1])[state_ended].float()
+      history_values[ended_n_indices, ended_lengths] = (state_scores[:, 0] - state_scores[:, 1])[state_ended].float()
       ended_history_mask = (
         state_ended.view(N, 1)
         & (c_indices.view(1, MAX_C) < history_length.view(N, 1))
