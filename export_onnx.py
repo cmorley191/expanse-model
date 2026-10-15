@@ -6,7 +6,7 @@ import model
 import torch
 cpu_device = torch.device('cpu')
 
-LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_7_weights___48463_1500502.pth")
+LOAD_WEIGHTS_PATH = os.path.join("weights", "0_centauri_7_weights___95156_2950896.pth")
 EXPORT_PATH = (
   f'{LOAD_WEIGHTS_PATH[:LOAD_WEIGHTS_PATH.rindex(".")]}'
   f'.onnx'

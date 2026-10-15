@@ -24,11 +24,11 @@ WEIGHTS_DIR = "weights"
 SAVE_WEIGHTS_FILENAME = "0_centauri_7_weights___.pth"
 SAVE_RATE_EPISODES = 50_000
 # LOAD_WEIGHTS_FILENAME: the network will load these weights if this file exists (see pausing/resuming training below)
-LOAD_WEIGHTS_FILENAME = "0_centauri_7_weights___48463_1500502.pth"
-STARTING_I_STEP = -1
-STARTING_I_EPISODE = 0
+LOAD_WEIGHTS_FILENAME = "0_centauri_7_weights___88731_2750864.pth"
+STARTING_I_STEP = 88731
+STARTING_I_EPISODE = 2750864
 
-LAMBDA = 0.98
+LAMBDA = 0.995
 
 make_model = (
   lambda log: (
@@ -97,10 +97,10 @@ def optimize():
 def main():
   #torch.autograd.detect_anomaly(True)
   with torch.no_grad():
-    N = 4096 + 2048
+    N = 4096 + 2048  # total in-progress games to have in memory
     n_indices = torch.arange(N, dtype=torch.long, device=gpu_device)
-    M = 2048
-    MAX_C = 300
+    M = 2048  # batch size for running the transformations / model; will often be smaller when a full batch of one phase can't be filled
+    MAX_C = 300  # max number of choice states in a game; high memory cost but if exceeded then training will crash (see "actual max c seen so far" in logs)
     actual_max_c = 0
     c_indices = torch.arange(MAX_C, dtype=torch.long, device=gpu_device)
 
